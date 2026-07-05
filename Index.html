@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Сканер штрих-кодов</title>
+  <style>
+    body { font-family: -apple-system, Roboto, sans-serif; margin: 0; padding: 16px; background: #f5f5f5; }
+    h2 { margin: 0 0 12px; font-size: 20px; text-align: center; }
+    #reader { max-width: 420px; margin: 0 auto; border-radius: 8px; overflow: hidden; }
+    #result { max-width: 420px; margin: 16px auto; background: #fff; border-radius: 8px; padding: 16px;
+              box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; }
+    #result table { width: 100%; border-collapse: collapse; }
+    #result td { padding: 6px 4px; border-bottom: 1px solid #eee; font-size: 15px; vertical-align: top; }
+    #result td:first-child { color: #666; white-space: nowrap; padding-right: 12px; }
+    .status { text-align: center; color: #666; margin: 12px 0; font-size: 14px; }
+    .notfound { color: #c62828; font-weight: 600; }
+    button { display: block; margin: 12px auto 0; padding: 12px 26px; font-size: 16px;
+             border: none; border-radius: 8px; background: #1a73e8; color: #fff; }
+  </style>
+</head>
+<body>
+  <h2>Сканер штрих-кодов</h2>
+  <div id="reader"></div>
+  <p class="status" id="status">Наведите камеру на штрих-код</p>
+  <div id="result"></div>
+  <button id="again" style="display:none">Сканировать ещё</button>
+
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script>
+    // ===== ВСТАВЬТЕ СЮДА ССЫЛКУ ВАШЕГО ВЕБ-ПРИЛОЖЕНИЯ (заканчивается на /exec) =====
+    const API_URL = 'https://script.google.com/macros/s/AKfycbwWvL9ZdXJCwQNnjFcOv5FmuG17Qipoo37XeHaLH14aUYaUSfNydCa8OyBn2BHklpMD/exec';
+
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('result');
+    const againBtn = document.getElementById('again');
+
+    const scanner = new Html5Qrcode('reader', {
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+    });
+
+    function start() {
+      resultEl.style.display = 'none';
+      againBtn.style.display = 'none';
+      statusEl.textContent = 'Наведите камеру на штрих-код';
+      scanner.start(
+        { facingMode: 'environment' },
+        { fps: 10, qrbox: { width: 280, height: 160 } },
+        onScan
+      ).catch(err => {
+        statusEl.textContent = 'Не удалось открыть камеру: ' + err;
+      });
+    }
+
+    function onScan(decodedText) {
+      scanner.pause(true);
+      statusEl.textContent = 'Ищу «' + decodedText + '» в таблице…';
+      fetch(API_URL + '?code=' + encodeURIComponent(decodedText))
+        .then(r => r.json())
+        .then(showResult)
+        .catch(err => {
+          statusEl.textContent = 'Ошибка запроса: ' + err;
+          againBtn.style.display = 'block';
+        });
+    }
+
+    function showResult(res) {
+      resultEl.style.display = 'block';
+      if (res.found) {
+        statusEl.textContent = 'Найдено:';
+        let html = '<table>';
+        for (const key in res.data) {
+          html += '<tr><td>' + key + '</td><td>' + res.data[key] + '</td></tr>';
+        }
+        resultEl.innerHTML = html + '</table>';
+      } else if (res.error) {
+        statusEl.textContent = '';
+        resultEl.innerHTML = '<span class="notfound">Ошибка: ' + res.error + '</span>';
+      } else {
+        statusEl.textContent = '';
+        resultEl.innerHTML = '<span class="notfound">Код «' + res.code + '» не найден в таблице</span>';
+      }
+      againBtn.style.display = 'block';
+    }
+
+    againBtn.onclick = () => { resultEl.style.display = 'none'; againBtn.style.display = 'none';
+      statusEl.textContent = 'Наведите камеру на штрих-код'; scanner.resume(); };
+
+    start();
+  </script>
+</body>
+</html>
