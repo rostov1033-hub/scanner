@@ -12,6 +12,7 @@
     #reader { width: 100%; }
     #reader video { width: 100% !important; height: 150px !important; object-fit: cover; }
     .status { text-align: center; color: #666; margin: 10px 0; font-size: 14px; }
+    .hint { color: #2e7d32; font-weight: 600; }
     .warn { color: #c62828; font-weight: 600; }
     #card { max-width: 420px; margin: 12px auto; background: #fff; border-radius: 8px; padding: 16px;
             box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; }
@@ -34,8 +35,8 @@
   <div id="reader-wrap"><div id="reader"></div></div>
   <p class="status" id="status">Загрузка…</p>
   <div id="card"></div>
-  <button id="btnStart" class="btn-start" style="display:none">Начать</button>
-  <button id="btnClose" class="btn-close" style="display:none">Закрыть</button>
+  <button id="btnStart" class="btn-start" style="display:none">Начать запаковку</button>
+  <button id="btnClose" class="btn-close" style="display:none">Закрыть коробку</button>
   <button id="btnCancel" class="btn-gray" style="display:none">Отмена</button>
   <button id="btnAgain" class="btn-gray" style="display:none">Сканировать другую коробку</button>
 
@@ -132,9 +133,14 @@
       cardEl.innerHTML = html + '</table>';
       statusEl.textContent = '';
 
-      if (box.status === ST_NEW) el('btnStart').style.display = 'block';
-      else if (box.status === ST_WORK) el('btnClose').style.display = 'block';
-      else statusEl.textContent = 'Коробка уже закрыта';
+      if (box.status === ST_NEW) {
+  el('btnStart').style.display = 'block';
+} else if (box.status === ST_WORK) {
+  statusEl.innerHTML = '<span class="hint">Положите товары в коробку, запакуйте и наклейте стикер</span>';
+  el('btnClose').style.display = 'block';
+} else {
+  statusEl.textContent = 'Коробка уже закрыта';
+}
       el('btnAgain').style.display = 'block';
     }
 
@@ -169,7 +175,7 @@
       mode = 'confirm';
       hideButtons();
       el('btnCancel').style.display = 'block';
-      statusEl.innerHTML = 'Для закрытия отсканируйте штрих-код коробки «' + currentCode + '» ещё раз';
+      statusEl.innerHTML = '<span class="hint">Для закрытия отсканируйте штрих-код коробки «' + currentCode + '» ещё раз</span>';
       scanner.resume();
     };
 
