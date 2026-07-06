@@ -22,30 +22,58 @@
 <body>
   <h2>Сканер штрих-кодов</h2>
   <div id="reader"></div>
-  <p class="status" id="status">Наведите камеру на штрих-код</p>
+  <p class="status" id="status">Загружаю данные таблицы…</p>
   <div id="result"></div>
   <button id="again" style="display:none">Сканировать ещё</button>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script>
-    // ===== ВСТАВЬТЕ СЮДА ССЫЛКУ ВАШЕГО ВЕБ-ПРИЛОЖЕНИЯ (заканчивается на /exec) =====
+    // ===== ВСТАВЬТЕ СЮДА ССЫЛКУ ВАШЕГО ВЕБ-ПРИЛОЖЕНИЯ (/exec) =====
     const API_URL = 'https://script.google.com/macros/s/AKfycbwWvL9ZdXJCwQNnjFcOv5FmuG17Qipoo37XeHaLH14aUYaUSfNydCa8OyBn2BHklpMD/exec';
 
     const statusEl = document.getElementById('status');
     const resultEl = document.getElementById('result');
     const againBtn = document.getElementById('again');
 
+    let db = null; // сюда загрузим всю таблицу
+
+    // Загружаем таблицу целиком при открытии страницы
+    fetch(API_URL + '?all=1')
+      .then(r => r.json())
+      .then(res => {
+        db = res.all || {};
+        statusEl.textContent = 'Наведите камеру на штрих-код';
+      })
+      .catch(() => {
+        statusEl.textContent = 'Не удалось загрузить таблицу — поиск будет через интернет (медленнее)';
+      });
+
+    // Только полосатые форматы — распознаётся быстрее и точнее
     const scanner = new Html5Qrcode('reader', {
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true }
+      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF
+      ]
     });
 
     function start() {
-      resultEl.style.display = 'none';
-      againBtn.style.display = 'none';
-      statusEl.textContent = 'Наведите камеру на штрих-код';
       scanner.start(
         { facingMode: 'environment' },
-        { fps: 10, qrbox: { width: 280, height: 160 } },
+        {
+          fps: 15,
+          qrbox: { width: 300, height: 120 }, // широкая рамка под полосатые коды
+          videoConstraints: {
+            facingMode: 'environment',
+            width: { ideal: 1920 },  // просим камеру дать высокое разрешение
+            height: { ideal: 1080 }
+          }
+        },
         onScan
       ).catch(err => {
         statusEl.textContent = 'Не удалось открыть камеру: ' + err;
@@ -54,14 +82,22 @@
 
     function onScan(decodedText) {
       scanner.pause(true);
-      statusEl.textContent = 'Ищу «' + decodedText + '» в таблице…';
-      fetch(API_URL + '?code=' + encodeURIComponent(decodedText))
-        .then(r => r.json())
-        .then(showResult)
-        .catch(err => {
-          statusEl.textContent = 'Ошибка запроса: ' + err;
-          againBtn.style.display = 'block';
-        });
+      const code = String(decodedText).trim();
+
+      if (db) {
+        // мгновенный поиск в загруженной таблице
+        showResult(db[code] ? { found: true, data: db[code] } : { found: false, code: code });
+      } else {
+        // запасной путь, если таблица не успела загрузиться
+        statusEl.textContent = 'Ищу «' + code + '» в таблице…';
+        fetch(API_URL + '?code=' + encodeURIComponent(code))
+          .then(r => r.json())
+          .then(showResult)
+          .catch(err => {
+            statusEl.textContent = 'Ошибка запроса: ' + err;
+            againBtn.style.display = 'block';
+          });
+      }
     }
 
     function showResult(res) {
@@ -73,9 +109,6 @@
           html += '<tr><td>' + key + '</td><td>' + res.data[key] + '</td></tr>';
         }
         resultEl.innerHTML = html + '</table>';
-      } else if (res.error) {
-        statusEl.textContent = '';
-        resultEl.innerHTML = '<span class="notfound">Ошибка: ' + res.error + '</span>';
       } else {
         statusEl.textContent = '';
         resultEl.innerHTML = '<span class="notfound">Код «' + res.code + '» не найден в таблице</span>';
@@ -83,8 +116,12 @@
       againBtn.style.display = 'block';
     }
 
-    againBtn.onclick = () => { resultEl.style.display = 'none'; againBtn.style.display = 'none';
-      statusEl.textContent = 'Наведите камеру на штрих-код'; scanner.resume(); };
+    againBtn.onclick = () => {
+      resultEl.style.display = 'none';
+      againBtn.style.display = 'none';
+      statusEl.textContent = 'Наведите камеру на штрих-код';
+      scanner.resume();
+    };
 
     start();
   </script>
