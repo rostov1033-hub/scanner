@@ -3,127 +3,190 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Сканер штрих-кодов</title>
+  <title>Сканер коробок</title>
   <style>
-    body { font-family: -apple-system, Roboto, sans-serif; margin: 0; padding: 16px; background: #f5f5f5; }
-    h2 { margin: 0 0 12px; font-size: 20px; text-align: center; }
-    #reader { max-width: 420px; margin: 0 auto; border-radius: 8px; overflow: hidden; }
-    #result { max-width: 420px; margin: 16px auto; background: #fff; border-radius: 8px; padding: 16px;
-              box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; }
-    #result table { width: 100%; border-collapse: collapse; }
-    #result td { padding: 6px 4px; border-bottom: 1px solid #eee; font-size: 15px; vertical-align: top; }
-    #result td:first-child { color: #666; white-space: nowrap; padding-right: 12px; }
-    .status { text-align: center; color: #666; margin: 12px 0; font-size: 14px; }
-    .notfound { color: #c62828; font-weight: 600; }
-    button { display: block; margin: 12px auto 0; padding: 12px 26px; font-size: 16px;
-             border: none; border-radius: 8px; background: #1a73e8; color: #fff; }
+    body { font-family: -apple-system, Roboto, sans-serif; margin: 0; padding: 12px; background: #f5f5f5; }
+    /* компактное окно сканирования: показываем только полосу нужной высоты */
+    #reader-wrap { max-width: 420px; height: 150px; margin: 0 auto; border-radius: 8px;
+                   overflow: hidden; position: relative; background: #000; }
+    #reader { width: 100%; }
+    #reader video { width: 100% !important; height: 150px !important; object-fit: cover; }
+    .status { text-align: center; color: #666; margin: 10px 0; font-size: 14px; }
+    .warn { color: #c62828; font-weight: 600; }
+    #card { max-width: 420px; margin: 12px auto; background: #fff; border-radius: 8px; padding: 16px;
+            box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; }
+    #card table { width: 100%; border-collapse: collapse; }
+    #card td { padding: 6px 4px; border-bottom: 1px solid #eee; font-size: 15px; vertical-align: top; }
+    #card td:first-child { color: #666; white-space: nowrap; padding-right: 12px; }
+    .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 14px;
+             font-weight: 600; margin-bottom: 10px; }
+    .st-new  { background: #fdecea; color: #c62828; }
+    .st-work { background: #fff8e1; color: #b28704; }
+    .st-done { background: #e8f5e9; color: #2e7d32; }
+    button { display: block; width: 100%; max-width: 420px; margin: 10px auto 0; padding: 13px;
+             font-size: 16px; border: none; border-radius: 8px; color: #fff; }
+    .btn-start { background: #1a73e8; }
+    .btn-close { background: #e65100; }
+    .btn-gray  { background: #9e9e9e; }
   </style>
 </head>
 <body>
-  <h2>Сканер штрих-кодов</h2>
-  <div id="reader"></div>
-  <p class="status" id="status">Загружаю данные таблицы…</p>
-  <div id="result"></div>
-  <button id="again" style="display:none">Сканировать ещё</button>
+  <div id="reader-wrap"><div id="reader"></div></div>
+  <p class="status" id="status">Загрузка…</p>
+  <div id="card"></div>
+  <button id="btnStart" class="btn-start" style="display:none">Начать</button>
+  <button id="btnClose" class="btn-close" style="display:none">Закрыть</button>
+  <button id="btnCancel" class="btn-gray" style="display:none">Отмена</button>
+  <button id="btnAgain" class="btn-gray" style="display:none">Сканировать другую коробку</button>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script>
-    // ===== ВСТАВЬТЕ СЮДА ССЫЛКУ ВАШЕГО ВЕБ-ПРИЛОЖЕНИЯ (/exec) =====
+    // ===== ВСТАВЬТЕ ССЫЛКУ ВЕБ-ПРИЛОЖЕНИЯ (/exec) =====
     const API_URL = 'https://script.google.com/macros/s/AKfycbwWvL9ZdXJCwQNnjFcOv5FmuG17Qipoo37XeHaLH14aUYaUSfNydCa8OyBn2BHklpMD/exec';
 
-    const statusEl = document.getElementById('status');
-    const resultEl = document.getElementById('result');
-    const againBtn = document.getElementById('again');
+    const ST_NEW = 'Не начата', ST_WORK = 'В процессе', ST_DONE = 'Закрыта';
+    const el = id => document.getElementById(id);
+    const statusEl = el('status'), cardEl = el('card');
 
-    let db = null; // сюда загрузим всю таблицу
+    let db = null;
+    let currentCode = null;     // коробка, с которой работаем
+    let mode = 'scan';          // scan — обычный скан; confirm — ждём повторный скан для закрытия
 
-    // Загружаем таблицу целиком при открытии страницы
-    fetch(API_URL + '?all=1')
-      .then(r => r.json())
-      .then(res => {
-        db = res.all || {};
-        statusEl.textContent = 'Наведите камеру на штрих-код';
-      })
-      .catch(() => {
-        statusEl.textContent = 'Не удалось загрузить таблицу — поиск будет через интернет (медленнее)';
-      });
+    // ---------- ПИН ----------
+    function getPin() {
+      let pin = localStorage.getItem('scanner_pin');
+      if (!pin) {
+        pin = prompt('Введите ПИН доступа:') || '';
+        localStorage.setItem('scanner_pin', pin);
+      }
+      return pin;
+    }
+    function api(params) {
+      return fetch(API_URL + '?' + params + '&key=' + encodeURIComponent(getPin()))
+        .then(r => r.json())
+        .then(res => {
+          if (res.error === 'auth') {
+            localStorage.removeItem('scanner_pin');
+            alert('Неверный ПИН');
+            location.reload();
+            throw new Error('auth');
+          }
+          return res;
+        });
+    }
 
-    // Только полосатые форматы — распознаётся быстрее и точнее
+    // ---------- Загрузка таблицы ----------
+    api('all=1')
+      .then(res => { db = res.all || {}; statusEl.textContent = 'Отсканируйте штрих-код коробки'; })
+      .catch(() => { statusEl.textContent = 'Ошибка загрузки таблицы. Обновите страницу.'; });
+
+    // ---------- Сканер ----------
     const scanner = new Html5Qrcode('reader', {
       experimentalFeatures: { useBarCodeDetectorIfSupported: true },
       formatsToSupport: [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
         Html5QrcodeSupportedFormats.ITF
       ]
     });
+    scanner.start(
+      { facingMode: 'environment' },
+      { fps: 15, qrbox: { width: 300, height: 110 },
+        videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } },
+      onScan
+    ).catch(err => { statusEl.textContent = 'Не удалось открыть камеру: ' + err; });
 
-    function start() {
-      scanner.start(
-        { facingMode: 'environment' },
-        {
-          fps: 15,
-          qrbox: { width: 300, height: 120 }, // широкая рамка под полосатые коды
-          videoConstraints: {
-            facingMode: 'environment',
-            width: { ideal: 1920 },  // просим камеру дать высокое разрешение
-            height: { ideal: 1080 }
-          }
-        },
-        onScan
-      ).catch(err => {
-        statusEl.textContent = 'Не удалось открыть камеру: ' + err;
-      });
-    }
-
-    function onScan(decodedText) {
-      scanner.pause(true);
-      const code = String(decodedText).trim();
-
-      if (db) {
-        // мгновенный поиск в загруженной таблице
-        showResult(db[code] ? { found: true, data: db[code] } : { found: false, code: code });
-      } else {
-        // запасной путь, если таблица не успела загрузиться
-        statusEl.textContent = 'Ищу «' + code + '» в таблице…';
-        fetch(API_URL + '?code=' + encodeURIComponent(code))
-          .then(r => r.json())
-          .then(showResult)
-          .catch(err => {
-            statusEl.textContent = 'Ошибка запроса: ' + err;
-            againBtn.style.display = 'block';
-          });
-      }
-    }
-
-    function showResult(res) {
-      resultEl.style.display = 'block';
-      if (res.found) {
-        statusEl.textContent = 'Найдено:';
-        let html = '<table>';
-        for (const key in res.data) {
-          html += '<tr><td>' + key + '</td><td>' + res.data[key] + '</td></tr>';
+    function onScan(text) {
+      const code = String(text).trim();
+      if (mode === 'confirm') {
+        if (code === currentCode) {
+          scanner.pause(true);
+          doAction('close', ST_DONE);
+        } else {
+          statusEl.innerHTML = '<span class="warn">Штрих-коды не совпадают!</span> Отсканируйте коробку «' + currentCode + '»';
         }
-        resultEl.innerHTML = html + '</table>';
-      } else {
-        statusEl.textContent = '';
-        resultEl.innerHTML = '<span class="notfound">Код «' + res.code + '» не найден в таблице</span>';
+        return;
       }
-      againBtn.style.display = 'block';
+      scanner.pause(true);
+      currentCode = code;
+      render();
     }
 
-    againBtn.onclick = () => {
-      resultEl.style.display = 'none';
-      againBtn.style.display = 'none';
-      statusEl.textContent = 'Наведите камеру на штрих-код';
+    // ---------- Отрисовка карточки ----------
+    function render() {
+      hideButtons();
+      const box = db[currentCode];
+      cardEl.style.display = 'block';
+
+      if (!box) {
+        statusEl.textContent = '';
+        cardEl.innerHTML = '<span class="warn">Код «' + currentCode + '» не найден в таблице</span>';
+        el('btnAgain').style.display = 'block';
+        return;
+      }
+
+      const cls = box.status === ST_DONE ? 'st-done' : box.status === ST_WORK ? 'st-work' : 'st-new';
+      let html = '<span class="badge ' + cls + '">' + box.status + '</span><table>';
+      for (const k in box.info) html += '<tr><td>' + k + '</td><td>' + box.info[k] + '</td></tr>';
+      cardEl.innerHTML = html + '</table>';
+      statusEl.textContent = '';
+
+      if (box.status === ST_NEW) el('btnStart').style.display = 'block';
+      else if (box.status === ST_WORK) el('btnClose').style.display = 'block';
+      else statusEl.textContent = 'Коробка уже закрыта';
+      el('btnAgain').style.display = 'block';
+    }
+
+    function hideButtons() {
+      ['btnStart', 'btnClose', 'btnCancel', 'btnAgain'].forEach(id => el(id).style.display = 'none');
+    }
+
+    // ---------- Действия ----------
+    function doAction(action, newStatus) {
+      statusEl.textContent = 'Сохраняю…';
+      hideButtons();
+      api('action=' + action + '&code=' + encodeURIComponent(currentCode))
+        .then(res => {
+          if (res.ok) {
+            db[currentCode].status = newStatus;
+            mode = 'scan';
+            render();
+          } else {
+            statusEl.innerHTML = '<span class="warn">' + (res.error || 'ошибка') + '</span>';
+            el('btnAgain').style.display = 'block';
+          }
+        })
+        .catch(() => {
+          statusEl.innerHTML = '<span class="warn">Нет связи, попробуйте ещё раз</span>';
+          render();
+        });
+    }
+
+    el('btnStart').onclick = () => doAction('start', ST_WORK);
+
+    el('btnClose').onclick = () => {
+      mode = 'confirm';
+      hideButtons();
+      el('btnCancel').style.display = 'block';
+      statusEl.innerHTML = 'Для закрытия отсканируйте штрих-код коробки «' + currentCode + '» ещё раз';
       scanner.resume();
     };
 
-    start();
+    el('btnCancel').onclick = () => {
+      mode = 'scan';
+      scanner.pause(true);
+      render();
+    };
+
+    el('btnAgain').onclick = () => {
+      mode = 'scan';
+      currentCode = null;
+      cardEl.style.display = 'none';
+      hideButtons();
+      statusEl.textContent = 'Отсканируйте штрих-код коробки';
+      scanner.resume();
+    };
   </script>
 </body>
 </html>
