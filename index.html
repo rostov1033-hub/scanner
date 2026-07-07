@@ -30,6 +30,13 @@
 #supplyList { margin-top: 12px; border-top: 2px solid #eee; padding-top: 10px; }
 #supplyList b { display: block; margin: 8px 0 4px; font-size: 14px; }
 #supplyList .badge { padding: 2px 8px; font-size: 12px; }
+    #allSupplies { max-width: 420px; margin: 12px auto; background: #fff; border-radius: 8px;
+               padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; }
+#allSupplies > b { display: block; margin-bottom: 6px; }
+.sup-row { padding: 9px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 15px; }
+.sup-detail { padding: 2px 0 8px 10px; }
+.sup-green { color: #2e7d32; font-weight: 600; }
+.sup-red { color: #c62828; font-weight: 600; }
     button { display: block; width: 100%; max-width: 420px; margin: 10px auto 0; padding: 13px;
              font-size: 16px; border: none; border-radius: 8px; color: #fff; }
     .btn-start { background: #1a73e8; }
@@ -45,6 +52,8 @@
   <button id="btnClose" class="btn-close" style="display:none">Закрыть коробку</button>
   <button id="btnCancel" class="btn-gray" style="display:none">Отмена</button>
   <button id="btnAgain" class="btn-gray" style="display:none">Сканировать другую коробку</button>
+  <button id="btnSupplies" class="btn-gray" style="display:none">Все поставки</button>
+<div id="allSupplies"></div>
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
   <script>
@@ -84,7 +93,11 @@
 
     // ---------- Загрузка таблицы ----------
     api('all=1')
-      .then(res => { db = res.all || {}; statusEl.textContent = 'Отсканируйте штрих-код коробки'; })
+      .then(res => {
+        db = res.all || {};
+        statusEl.textContent = 'Отсканируйте штрих-код коробки';
+        el('btnSupplies').style.display = 'block';
+      })
       .catch(() => { statusEl.textContent = 'Ошибка загрузки таблицы. Обновите страницу.'; });
 
     // ---------- Сканер ----------
@@ -143,6 +156,7 @@
         statusEl.textContent = '';
         cardEl.innerHTML = '<span class="warn">Код «' + currentCode + '» не найден в таблице</span>';
         el('btnAgain').style.display = 'block';
+        el('btnSupplies').style.display = 'block';
         return;
       }
 
@@ -155,18 +169,20 @@
       statusEl.textContent = '';
 
       if (box.status === ST_NEW) {
-  el('btnStart').style.display = 'block';
-} else if (box.status === ST_WORK) {
-  statusEl.innerHTML = '<span class="hint">Положите товары в коробку, запакуйте и наклейте стикер</span>';
-  el('btnClose').style.display = 'block';
-} else {
-  statusEl.textContent = 'Коробка уже закрыта';
-}
+        el('btnStart').style.display = 'block';
+      } else if (box.status === ST_WORK) {
+        statusEl.innerHTML = '<span class="hint">Положите товары в коробку, запакуйте и наклейте стикер</span>';
+        el('btnClose').style.display = 'block';
+      } else {
+        statusEl.textContent = 'Коробка уже закрыта';
+      }
       el('btnAgain').style.display = 'block';
+      el('btnSupplies').style.display = 'block';
     }
 
     function hideButtons() {
-      ['btnStart', 'btnClose', 'btnCancel', 'btnAgain'].forEach(id => el(id).style.display = 'none');
+      ['btnStart', 'btnClose', 'btnCancel', 'btnAgain', 'btnSupplies'].forEach(id => el(id).style.display = 'none');
+      el('allSupplies').style.display = 'none';
     }
 
     function supplyStats(supply) {
@@ -180,11 +196,8 @@
       return { total: total, done: done };
     }
 
-    function toggleSupply() {
-      const listEl = el('supplyList');
-      if (listEl.style.display === 'block') { listEl.style.display = 'none'; return; }
-      const supply = db[currentCode].supply;
-      let html = '<b>Коробки поставки «' + supply + '»</b><table>';
+    function supplyBoxesHtml(supply) {
+      let html = '<table>';
       for (const code in db) {
         const b = db[code];
         if (b.supply !== supply) continue;
@@ -193,7 +206,14 @@
                 ' — ' + (b.qty || '?') + ' шт.</small></td>' +
                 '<td style="text-align:right"><span class="badge ' + c + '">' + b.status + '</span></td></tr>';
       }
-      listEl.innerHTML = html + '</table>';
+      return html + '</table>';
+    }
+
+    function toggleSupply() {
+      const listEl = el('supplyList');
+      if (listEl.style.display === 'block') { listEl.style.display = 'none'; return; }
+      const supply = db[currentCode].supply;
+      listEl.innerHTML = '<b>Коробки поставки «' + supply + '»</b>' + supplyBoxesHtml(supply);
       listEl.style.display = 'block';
     }
 
@@ -210,6 +230,7 @@
           } else {
             statusEl.innerHTML = '<span class="warn">' + (res.error || 'ошибка') + '</span>';
             el('btnAgain').style.display = 'block';
+            el('btnSupplies').style.display = 'block';
           }
         })
         .catch(() => {
@@ -240,7 +261,36 @@
       cardEl.style.display = 'none';
       hideButtons();
       statusEl.textContent = 'Отсканируйте штрих-код коробки';
+      el('btnSupplies').style.display = 'block';
       scanner.resume();
+    };
+
+    el('btnSupplies').onclick = () => {
+      const panel = el('allSupplies');
+      if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+      const stats = {};
+      for (const code in db) {
+        const s = db[code].supply;
+        (stats[s] = stats[s] || { total: 0, done: 0 }).total++;
+        if (db[code].status === ST_DONE) stats[s].done++;
+      }
+      let html = '<b>Все поставки</b>';
+      for (const s in stats) {
+        const st = stats[s];
+        const cls = st.done === st.total ? 'sup-green' : 'sup-red';
+        html += '<div class="sup-row" data-supply="' + s + '">«' + s + '» — <span class="' + cls +
+                '">Закрыто ' + st.done + '/' + st.total + '</span></div><div class="sup-detail" style="display:none"></div>';
+      }
+      panel.innerHTML = html;
+      panel.querySelectorAll('.sup-row').forEach(row => {
+        row.onclick = () => {
+          const det = row.nextElementSibling;
+          if (det.style.display === 'block') { det.style.display = 'none'; return; }
+          det.innerHTML = supplyBoxesHtml(row.dataset.supply);
+          det.style.display = 'block';
+        };
+      });
+      panel.style.display = 'block';
     };
   </script>
 </body>
