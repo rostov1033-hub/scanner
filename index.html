@@ -270,16 +270,20 @@
       if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
       const stats = {};
       for (const code in db) {
-        const s = db[code].supply;
-        (stats[s] = stats[s] || { total: 0, done: 0 }).total++;
-        if (db[code].status === ST_DONE) stats[s].done++;
+        const b = db[code];
+        const st = (stats[b.supply] = stats[b.supply] || { total: 0, done: 0, clusters: [] });
+        st.total++;
+        if (b.status === ST_DONE) st.done++;
+        if (b.cluster && st.clusters.indexOf(b.cluster) === -1) st.clusters.push(b.cluster);
       }
       let html = '<b>Все поставки</b>';
       for (const s in stats) {
         const st = stats[s];
         const cls = st.done === st.total ? 'sup-green' : 'sup-red';
         html += '<div class="sup-row" data-supply="' + s + '">«' + s + '» — <span class="' + cls +
-                '">Закрыто ' + st.done + '/' + st.total + '</span></div><div class="sup-detail" style="display:none"></div>';
+                '">Закрыто ' + st.done + '/' + st.total + '</span>' +
+                (st.clusters.length ? '<br><small style="color:#666">' + st.clusters.join(', ') + '</small>' : '') +
+                '</div><div class="sup-detail" style="display:none"></div>';
       }
       panel.innerHTML = html;
       panel.querySelectorAll('.sup-row').forEach(row => {
