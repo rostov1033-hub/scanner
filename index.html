@@ -24,6 +24,12 @@
     .st-new  { background: #fdecea; color: #c62828; }
     .st-work { background: #fff8e1; color: #b28704; }
     .st-done { background: #e8f5e9; color: #2e7d32; }
+    .badge-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.badge-row .badge { margin-bottom: 0; }
+.counter { color: #1a73e8; font-weight: 600; font-size: 14px; text-decoration: underline; }
+#supplyList { margin-top: 12px; border-top: 2px solid #eee; padding-top: 10px; }
+#supplyList b { display: block; margin: 8px 0 4px; font-size: 14px; }
+#supplyList .badge { padding: 2px 8px; font-size: 12px; }
     button { display: block; width: 100%; max-width: 420px; margin: 10px auto 0; padding: 13px;
              font-size: 16px; border: none; border-radius: 8px; color: #fff; }
     .btn-start { background: #1a73e8; }
@@ -128,9 +134,11 @@
       }
 
       const cls = box.status === ST_DONE ? 'st-done' : box.status === ST_WORK ? 'st-work' : 'st-new';
-      let html = '<span class="badge ' + cls + '">' + box.status + '</span><table>';
+      const stats = supplyStats(box.supply);
+      let html = '<div class="badge-row"><span class="badge ' + cls + '">' + box.status + '</span>' +
+        '<span class="counter" onclick="toggleSupply()">Закрыто ' + stats.done + '/' + stats.total + '</span></div><table>';
       for (const k in box.info) html += '<tr><td>' + k + '</td><td>' + box.info[k] + '</td></tr>';
-      cardEl.innerHTML = html + '</table>';
+      cardEl.innerHTML = html + '</table><div id="supplyList" style="display:none"></div>';
       statusEl.textContent = '';
 
       if (box.status === ST_NEW) {
@@ -146,6 +154,34 @@
 
     function hideButtons() {
       ['btnStart', 'btnClose', 'btnCancel', 'btnAgain'].forEach(id => el(id).style.display = 'none');
+    }
+
+    function supplyStats(supply) {
+      let total = 0, done = 0;
+      for (const code in db) {
+        if (db[code].supply === supply) {
+          total++;
+          if (db[code].status === ST_DONE) done++;
+        }
+      }
+      return { total: total, done: done };
+    }
+
+    function toggleSupply() {
+      const listEl = el('supplyList');
+      if (listEl.style.display === 'block') { listEl.style.display = 'none'; return; }
+      const supply = db[currentCode].supply;
+      let html = '<b>Коробки поставки «' + supply + '»</b><table>';
+      for (const code in db) {
+        const b = db[code];
+        if (b.supply !== supply) continue;
+        const c = b.status === ST_DONE ? 'st-done' : b.status === ST_WORK ? 'st-work' : 'st-new';
+        html += '<tr><td>' + code + '<br><small style="color:#666">' + (b.article || '—') +
+                ' — ' + (b.qty || '?') + ' шт.</small></td>' +
+                '<td style="text-align:right"><span class="badge ' + c + '">' + b.status + '</span></td></tr>';
+      }
+      listEl.innerHTML = html + '</table>';
+      listEl.style.display = 'block';
     }
 
     // ---------- Действия ----------
