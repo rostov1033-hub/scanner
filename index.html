@@ -114,7 +114,7 @@
       return scanner.start(
         { facingMode: 'environment' },
         { fps: 15, qrbox: { width: 300, height: 110 },
-          videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } },
+          videoConstraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
         onScan
       ).then(() => {
         // если открыта карточка и мы не ждём подтверждающего скана — камера должна стоять на паузе
