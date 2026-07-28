@@ -114,9 +114,16 @@
       return scanner.start(
         { facingMode: 'environment' },
         { fps: 15, qrbox: { width: 300, height: 110 },
-          videoConstraints: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
+          videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } },
         onScan
       ).then(() => {
+        // сбрасываем зум на минимум, если камера это умеет
+        try {
+          const caps = scanner.getRunningTrackCapabilities();
+          if (caps && caps.zoom && typeof caps.zoom.min !== 'undefined') {
+            scanner.applyVideoConstraints({ advanced: [{ zoom: caps.zoom.min }] }).catch(() => {});
+          }
+        } catch (e) {}
         // если открыта карточка и мы не ждём подтверждающего скана — камера должна стоять на паузе
         if (currentCode && mode === 'scan') scanner.pause(true);
       }).catch(err => { statusEl.textContent = 'Не удалось открыть камеру: ' + err; });
