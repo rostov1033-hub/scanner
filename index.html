@@ -926,25 +926,24 @@ body {
           facingMode: 'environment'
         },
         {
-          fps: 15,
+  fps: 15,
 
-          qrbox: {
-            width: 300,
-            height: 110
-          },
+  qrbox: {
+    width: 300,
+    height: 110
+  },
 
-          videoConstraints: {
-            facingMode: 'environment',
-
-            width: {
-              ideal: 1920
-            },
-
-            height: {
-              ideal: 1080
-            }
-          }
-        },
+  /*
+    Не заставляем телефон открывать камеру в 1920x1080.
+    На некоторых смартфонах это приводит к сильному
+    кропу / зуму или выбору неудачного объектива.
+  */
+  videoConstraints: {
+    facingMode: {
+      ideal: 'environment'
+    }
+  }
+},
 
         onScan
 
@@ -1008,6 +1007,66 @@ body {
     let cameraRestarting = false;
 
 async function restartCameraAfterReturn() {
+
+  /*
+    Если карточка коробки уже открыта и мы НЕ ждём
+    повторного скана для закрытия — камера не нужна.
+  */
+  if (
+    currentCode &&
+    mode === 'scan'
+  ) {
+    await scanner
+      .stop()
+      .catch(() => {});
+
+    return;
+  }
+
+
+  if (cameraRestarting) {
+    return;
+  }
+
+
+  cameraRestarting = true;
+
+  try {
+
+    await scanner
+      .stop()
+      .catch(() => {});
+
+
+    /*
+      Даём браузеру освободить старый поток камеры.
+    */
+    await new Promise(resolve =>
+      setTimeout(resolve, 300)
+    );
+
+
+    await startScanner();
+
+  } finally {
+
+    cameraRestarting = false;
+  }
+}
+
+
+document.addEventListener(
+  'visibilitychange',
+  () => {
+
+    if (
+      document.visibilityState ===
+      'visible'
+    ) {
+      restartCameraAfterReturn();
+    }
+  }
+);
   if (cameraRestarting) return;
 
   cameraRestarting = true;
@@ -1075,14 +1134,19 @@ document.addEventListener(
 
         if (code === currentCode) {
 
-          try {
-            scanner.pause(false);
-          } catch (e) {}
-
-          doAction(
-            'close',
-            ST_DONE
-          );
+  /*
+    Подтверждающий штрихкод считан —
+    камера снова больше не нужна.
+  */
+  scanner
+    .stop()
+    .catch(() => {})
+    .then(() => {
+      doAction(
+        'close',
+        ST_DONE
+      );
+    });
 
         } else {
 
@@ -1101,13 +1165,17 @@ document.addEventListener(
       /*
         Обычное сканирование.
       */
-      try {
-        scanner.pause(false);
-      } catch (e) {}
-
-      currentCode = code;
-
-      render();
+      /*
+  Коробка считана — камера больше не нужна.
+  Полностью выключаем её, чтобы не расходовать батарею.
+*/
+scanner
+  .stop()
+  .catch(() => {})
+  .then(() => {
+    currentCode = code;
+    render();
+  });
     }
 
 
@@ -1235,28 +1303,42 @@ document.addEventListener(
 
 
       let html =
-        '<div class="badge-row">' +
+  '<div class="badge-row">' +
 
-          '<span class="badge ' +
-          badgeClass +
-          '">' +
-          escapeHtml(box.status) +
-          '</span>' +
+    '<span class="badge ' +
+    badgeClass +
+    '">' +
+    escapeHtml(box.status) +
+    '</span>' +
 
-          '<span class="counter ' +
-          counterClass +
-          '" onclick="toggleSupply()">' +
+    '<span class="counter ' +
+    counterClass +
+    '" onclick="toggleSupply()">' +
 
-          'Закрыто ' +
-          stats.counted +
-          '/' +
-          stats.total +
+    'Закрыто ' +
+    stats.counted +
+    '/' +
+    stats.total +
 
-          '</span>' +
+    '</span>' +
 
-        '</div>' +
+  '</div>' +
 
-        '<table>';
+  '<table>' +
+
+    /*
+      Номер отсканированной этикетки всегда
+      показываем первой строкой.
+    */
+    '<tr>' +
+      '<td>Коробка</td>' +
+      '<td><b>' +
+        escapeHtml(currentCode) +
+      '</b></td>' +
+    '</tr>';
+
+
+for (const k in box.info) {
 
 
       for (const k in box.info) {
@@ -1566,48 +1648,46 @@ document.addEventListener(
     // ЗАКРЫТЬ КОРОБКУ
     // =========================================================
 
-    el('btnClose').onclick = () => {
+    el('btnClose').onclick = async () => {
 
-      mode = 'confirm';
+  mode = 'confirm';
 
-      hideButtons();
+  hideButtons();
 
-      el('btnCancel').style.display =
-        'block';
-
-
-      statusEl.innerHTML =
-        '<span class="hint">' +
-
-        'Для закрытия отсканируйте штрих-код коробки «' +
-
-        escapeHtml(currentCode) +
-
-        '» ещё раз' +
-
-        '</span>';
+  el('btnCancel').style.display =
+    'block';
 
 
-      try {
-        scanner.resume();
-      } catch (e) {}
-    };
+  statusEl.innerHTML =
+    '<span class="hint">' +
+    'Для закрытия отсканируйте штрих-код коробки «' +
+    escapeHtml(currentCode) +
+    '» ещё раз' +
+    '</span>';
+
+
+  /*
+    Камера после первого сканирования была полностью
+    выключена. Для подтверждения запускаем её заново.
+  */
+  await startScanner();
+};
 
 
     // =========================================================
     // ОТМЕНА ЗАКРЫТИЯ
     // =========================================================
 
-    el('btnCancel').onclick = () => {
+    el('btnCancel').onclick = async () => {
 
-      mode = 'scan';
+  mode = 'scan';
 
-      try {
-        scanner.pause(false);
-      } catch (e) {}
+  await scanner
+    .stop()
+    .catch(() => {});
 
-      render();
-    };
+  render();
+};
 
 
     // =========================================================
@@ -1636,9 +1716,10 @@ document.addEventListener(
         'block';
 
 
-      try {
-        scanner.resume();
-      } catch (e) {}
+      /*
+  Для следующей коробки снова включаем камеру.
+*/
+startScanner();
     };
 
 
