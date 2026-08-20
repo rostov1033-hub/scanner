@@ -2,308 +2,1876 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, viewport-fit=cover"
+  >
+
+  <meta name="theme-color" content="#f5f5f5">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
   <title>Сканер коробок</title>
+
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+
   <style>
-    body { font-family: -apple-system, Roboto, sans-serif; margin: 0; padding: 12px; background: #f5f5f5; }
-    /* компактное окно сканирования: показываем только полосу нужной высоты */
-    #reader-wrap { max-width: 420px; height: 150px; margin: 0 auto; border-radius: 8px;
-                   overflow: hidden; position: relative; background: #000; }
-    #reader { width: 100%; }
-    #reader video { width: 100% !important; height: 150px !important; object-fit: cover; }
-    .status { text-align: center; color: #2e7d32; font-weight: 600; margin: 10px 0; font-size: 14px; }
-    .hint { color: #2e7d32; font-weight: 600; }
-    .warn { color: #c62828; font-weight: 600; }
-    #card { max-width: 420px; margin: 12px auto; background: #fff; border-radius: 8px; padding: 16px;
-            box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; }
-    #card table { width: 100%; border-collapse: collapse; }
-    #card td { padding: 6px 4px; border-bottom: 1px solid #eee; font-size: 15px; vertical-align: top; }
-    #card td:first-child { color: #666; white-space: nowrap; padding-right: 12px; }
-    .badge { display: inline-block; padding: 4px 12px; border-radius: 12px; font-size: 14px;
-             font-weight: 600; margin-bottom: 10px; }
-    .st-new  { background: #fdecea; color: #c62828; }
-    .st-work { background: #fff8e1; color: #b28704; }
-    .st-done { background: #e8f5e9; color: #2e7d32; }
-    .badge-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.badge-row .badge { margin-bottom: 0; }
-.counter { color: #1a73e8; font-weight: 600; font-size: 14px; text-decoration: underline; }
-#supplyList { margin-top: 12px; border-top: 2px solid #eee; padding-top: 10px; }
-#supplyList b { display: block; margin: 8px 0 4px; font-size: 14px; }
-#supplyList .badge { padding: 2px 8px; font-size: 12px; }
-    #allSupplies { max-width: 420px; margin: 12px auto; background: #fff; border-radius: 8px;
-               padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.12); display: none; }
-#allSupplies > b { display: block; margin-bottom: 6px; }
-.sup-row { padding: 9px 0; border-bottom: 1px solid #eee; cursor: pointer; font-size: 15px; }
-.sup-detail { padding: 2px 0 8px 10px; }
-.sup-green { color: #2e7d32; font-weight: 600; }
-.sup-red { color: #c62828; font-weight: 600; }
-    button { display: block; width: 100%; max-width: 420px; margin: 10px auto 0; padding: 13px;
-             font-size: 16px; border: none; border-radius: 8px; color: #fff; }
-    .btn-start { background: #1a73e8; }
-    .btn-close { background: #e65100; }
-    .btn-gray  { background: #9e9e9e; }
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding:
+        max(12px, env(safe-area-inset-top))
+        12px
+        max(20px, env(safe-area-inset-bottom));
+      background: #f5f5f5;
+      color: #202124;
+    }
+
+    .topbar {
+      max-width: 420px;
+      margin: 0 auto 10px;
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      min-height: 24px;
+    }
+
+    #netState {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 4px 9px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #e8f5e9;
+      color: #2e7d32;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    #netState.offline {
+      background: #fdecea;
+      color: #c62828;
+    }
+
+    #netState.syncing {
+      background: #e8f0fe;
+      color: #1a73e8;
+    }
+
+    #netState.pending {
+      background: #fff8e1;
+      color: #9a6700;
+    }
+
+    /* ===== СКАНЕР ===== */
+
+    #reader-wrap {
+      max-width: 420px;
+      height: 150px;
+      margin: 0 auto;
+      border-radius: 12px;
+      overflow: hidden;
+      position: relative;
+      background: #000;
+      box-shadow: 0 1px 5px rgba(0,0,0,.15);
+    }
+
+    #reader {
+      width: 100%;
+      height: 150px;
+      border: none !important;
+    }
+
+    #reader video {
+      width: 100% !important;
+      height: 150px !important;
+      object-fit: cover;
+    }
+
+    /*
+      Убираем стандартные углы / рамку html5-qrcode
+    */
+    #reader #qr-shaded-region {
+      border: none !important;
+      box-shadow: none !important;
+    }
+
+    #reader #qr-shaded-region > div {
+      display: none !important;
+    }
+
+    /*
+      Красная линия сканирования
+    */
+    #reader-wrap::after {
+      content: "";
+      position: absolute;
+      z-index: 20;
+      top: 50%;
+      left: 7%;
+      right: 7%;
+      height: 2px;
+      transform: translateY(-50%);
+      background: #ff2d2d;
+      border-radius: 2px;
+      box-shadow:
+        0 0 4px rgba(255,45,45,.9),
+        0 0 9px rgba(255,45,45,.45);
+      pointer-events: none;
+    }
+
+    /* ===== СТАТУС ===== */
+
+    .status {
+      max-width: 420px;
+      min-height: 20px;
+      text-align: center;
+      color: #2e7d32;
+      font-weight: 600;
+      margin: 10px auto;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+
+    .hint {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+
+    .warn {
+      color: #c62828;
+      font-weight: 600;
+    }
+
+    /* ===== КАРТОЧКА ===== */
+
+    #card {
+      max-width: 420px;
+      margin: 12px auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 5px rgba(0,0,0,.12);
+      display: none;
+    }
+
+    #card table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    #card td {
+      padding: 7px 4px;
+      border-bottom: 1px solid #eee;
+      font-size: 15px;
+      vertical-align: top;
+    }
+
+    #card td:first-child {
+      color: #666;
+      white-space: nowrap;
+      padding-right: 12px;
+    }
+
+    #card tr:last-child td {
+      border-bottom: none;
+    }
+
+    /* ===== ПЛАШКИ СТАТУСА ===== */
+
+    .badge {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      min-width: 92px;
+      min-height: 27px;
+      padding: 4px 10px;
+      border-radius: 14px;
+      font-size: 13px;
+      line-height: 1.1;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .st-new {
+      background: #fdecea;
+      color: #c62828;
+    }
+
+    .st-work {
+      background: #fff3cd;
+      color: #946200;
+    }
+
+    .st-done {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .badge-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    /* ===== СЧЁТЧИК ===== */
+
+    .counter {
+      font-weight: 600;
+      font-size: 14px;
+      text-decoration: underline;
+      cursor: pointer;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .counter-blue {
+      color: #1a73e8;
+    }
+
+    .counter-yellow {
+      color: #b07800;
+    }
+
+    .counter-green {
+      color: #2e7d32;
+    }
+
+    /* ===== ПОСТАВКА В КАРТОЧКЕ ===== */
+
+    #supplyList {
+      margin-top: 12px;
+      border-top: 2px solid #eee;
+      padding-top: 10px;
+    }
+
+    #supplyList b {
+      display: block;
+      margin: 8px 0 4px;
+      font-size: 14px;
+    }
+
+    #supplyList .badge {
+      min-width: 82px;
+      padding: 3px 7px;
+      font-size: 12px;
+    }
+
+    /* ===== ВСЕ ПОСТАВКИ ===== */
+
+    #allSupplies {
+      max-width: 420px;
+      margin: 12px auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 5px rgba(0,0,0,.12);
+      display: none;
+    }
+
+    #allSupplies > b {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .sup-row {
+      padding: 11px 2px;
+      border-bottom: 1px solid #eee;
+      cursor: pointer;
+      font-size: 15px;
+      line-height: 1.4;
+    }
+
+    .sup-row:active {
+      background: #f7f7f7;
+    }
+
+    .sup-detail {
+      padding: 3px 0 10px 8px;
+    }
+
+    .sup-green {
+      color: #2e7d32;
+      font-weight: 600;
+    }
+
+    .sup-red {
+      color: #c62828;
+      font-weight: 600;
+    }
+
+    .sup-yellow {
+      color: #b07800;
+      font-weight: 600;
+    }
+
+    /* ===== КНОПКИ ===== */
+
+    button {
+      display: block;
+      width: 100%;
+      max-width: 420px;
+      margin: 10px auto 0;
+      padding: 14px;
+      min-height: 48px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 10px;
+      color: #fff;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    button:active {
+      transform: scale(.99);
+    }
+
+    .btn-start {
+      background: #1a73e8;
+    }
+
+    .btn-close {
+      background: #e65100;
+    }
+
+    .btn-gray {
+      background: #8a8a8a;
+    }
   </style>
 </head>
+
 <body>
-  <div id="reader-wrap"><div id="reader"></div></div>
+
+  <div class="topbar">
+    <span id="netState">Онлайн</span>
+  </div>
+
+  <div id="reader-wrap">
+    <div id="reader"></div>
+  </div>
+
   <p class="status" id="status">Загрузка…</p>
+
   <div id="card"></div>
-  <button id="btnStart" class="btn-start" style="display:none">Начать запаковку</button>
-  <button id="btnClose" class="btn-close" style="display:none">Закрыть коробку</button>
-  <button id="btnCancel" class="btn-gray" style="display:none">Отмена</button>
-  <button id="btnAgain" class="btn-gray" style="display:none">Сканировать другую коробку</button>
-  <button id="btnSupplies" class="btn-gray" style="display:none">Все поставки</button>
-<div id="allSupplies"></div>
+
+  <button
+    id="btnStart"
+    class="btn-start"
+    style="display:none"
+  >
+    Начать запаковку
+  </button>
+
+  <button
+    id="btnClose"
+    class="btn-close"
+    style="display:none"
+  >
+    Закрыть коробку
+  </button>
+
+  <button
+    id="btnCancel"
+    class="btn-gray"
+    style="display:none"
+  >
+    Отмена
+  </button>
+
+  <button
+    id="btnAgain"
+    class="btn-gray"
+    style="display:none"
+  >
+    Сканировать другую коробку
+  </button>
+
+  <button
+    id="btnSupplies"
+    class="btn-gray"
+    style="display:none"
+  >
+    Все поставки
+  </button>
+
+  <div id="allSupplies"></div>
+
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+
   <script>
-    // ===== ВСТАВЬТЕ ССЫЛКУ ВЕБ-ПРИЛОЖЕНИЯ (/exec) =====
-    const API_URL = 'https://script.google.com/macros/s/AKfycbwWvL9ZdXJCwQNnjFcOv5FmuG17Qipoo37XeHaLH14aUYaUSfNydCa8OyBn2BHklpMD/exec';
+    // =========================================================
+    // API
+    // =========================================================
 
-    const ST_NEW = 'Не начата', ST_WORK = 'В процессе', ST_DONE = 'Закрыта';
+    const API_URL =
+      'https://script.google.com/macros/s/AKfycbwWvL9ZdXJCwQNnjFcOv5FmuG17Qipoo37XeHaLH14aUYaUSfNydCa8OyBn2BHklpMD/exec';
+
+
+    // =========================================================
+    // СТАТУСЫ
+    // =========================================================
+
+    const ST_NEW  = 'Не начата';
+    const ST_WORK = 'В процессе';
+    const ST_DONE = 'Закрыта';
+
+
+    // =========================================================
+    // LOCAL STORAGE
+    // =========================================================
+
+    const DB_CACHE_KEY = 'scanner_db_cache_v2';
+    const QUEUE_KEY    = 'scanner_action_queue_v1';
+
+
+    // =========================================================
+    // DOM
+    // =========================================================
+
     const el = id => document.getElementById(id);
-    const statusEl = el('status'), cardEl = el('card');
 
-    let db = null;
-    let currentCode = null;     // коробка, с которой работаем
-    let mode = 'scan';          // scan — обычный скан; confirm — ждём повторный скан для закрытия
+    const statusEl = el('status');
+    const cardEl   = el('card');
+    const netState = el('netState');
 
-    // ---------- ПИН ----------
+
+    // =========================================================
+    // СОСТОЯНИЕ
+    // =========================================================
+
+    let db = loadCachedDb();
+
+    let currentCode = null;
+
+    /*
+      scan    — обычное сканирование
+      confirm — ждём повторного сканирования коробки
+    */
+    let mode = 'scan';
+
+    let syncBusy = false;
+
+
+    // =========================================================
+    // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+    // =========================================================
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+
+    // =========================================================
+    // КЭШ ТАБЛИЦЫ
+    // =========================================================
+
+    function loadCachedDb() {
+      try {
+        const raw = localStorage.getItem(DB_CACHE_KEY);
+
+        if (!raw) return null;
+
+        return JSON.parse(raw);
+      } catch (e) {
+        return null;
+      }
+    }
+
+    function saveDbCache() {
+      try {
+        localStorage.setItem(
+          DB_CACHE_KEY,
+          JSON.stringify(db || {})
+        );
+      } catch (e) {}
+    }
+
+
+    // =========================================================
+    // ОЧЕРЕДЬ ДЕЙСТВИЙ
+    // =========================================================
+
+    function getQueue() {
+      try {
+        return JSON.parse(
+          localStorage.getItem(QUEUE_KEY) || '[]'
+        );
+      } catch (e) {
+        return [];
+      }
+    }
+
+    function saveQueue(queue) {
+      localStorage.setItem(
+        QUEUE_KEY,
+        JSON.stringify(queue)
+      );
+
+      updateNetState();
+    }
+
+    function addToQueue(action, code, newStatus) {
+      const queue = getQueue();
+
+      queue.push({
+        id:
+          Date.now().toString(36) +
+          Math.random().toString(36).slice(2),
+
+        action,
+        code,
+        newStatus,
+        createdAt: Date.now()
+      });
+
+      saveQueue(queue);
+    }
+
+
+    /*
+      Если мы загрузили свежую таблицу с сервера,
+      но у нас есть ещё не отправленные локальные действия,
+      накладываем их поверх серверной версии.
+
+      Благодаря этому офлайн-изменения не исчезнут.
+    */
+    function applyPendingStatuses(targetDb) {
+      const queue = getQueue();
+
+      queue.forEach(item => {
+        if (targetDb[item.code]) {
+          targetDb[item.code].status = item.newStatus;
+        }
+      });
+
+      return targetDb;
+    }
+
+
+    // =========================================================
+    // ИНДИКАТОР СЕТИ
+    // =========================================================
+
+    function updateNetState() {
+      const queue = getQueue();
+
+      netState.className = '';
+
+      if (!navigator.onLine) {
+        netState.classList.add('offline');
+
+        netState.textContent =
+          queue.length
+            ? 'Офлайн • ' + queue.length
+            : 'Офлайн';
+
+        return;
+      }
+
+      if (syncBusy) {
+        netState.classList.add('syncing');
+        netState.textContent = 'Синхронизация…';
+        return;
+      }
+
+      if (queue.length) {
+        netState.classList.add('pending');
+
+        netState.textContent =
+          'Ждут отправки • ' + queue.length;
+
+        return;
+      }
+
+      netState.textContent = 'Онлайн';
+    }
+
+
+    // =========================================================
+    // ПИН
+    // =========================================================
+
     function getPin() {
       let pin = localStorage.getItem('scanner_pin');
+
       if (!pin) {
         pin = prompt('Введите ПИН доступа:') || '';
-        localStorage.setItem('scanner_pin', pin);
+
+        if (pin) {
+          localStorage.setItem(
+            'scanner_pin',
+            pin
+          );
+        }
       }
+
       return pin;
     }
+
+
+    // =========================================================
+    // API
+    // =========================================================
+
     function api(params) {
-      return fetch(API_URL + '?' + params + '&key=' + encodeURIComponent(getPin()))
-        .then(r => r.json())
+      return fetch(
+        API_URL +
+        '?' +
+        params +
+        '&key=' +
+        encodeURIComponent(getPin()),
+        {
+          cache: 'no-store'
+        }
+      )
+        .then(r => {
+          if (!r.ok) {
+            throw new Error(
+              'HTTP ' + r.status
+            );
+          }
+
+          return r.json();
+        })
         .then(res => {
           if (res.error === 'auth') {
-            localStorage.removeItem('scanner_pin');
+            localStorage.removeItem(
+              'scanner_pin'
+            );
+
             alert('Неверный ПИН');
+
             location.reload();
+
             throw new Error('auth');
           }
+
           return res;
         });
     }
 
-    // ---------- Загрузка таблицы ----------
-    api('all=1')
-      .then(res => {
-        db = res.all || {};
-        statusEl.textContent = 'Отсканируйте штрих-код коробки';
-        el('btnSupplies').style.display = 'block';
-      })
-      .catch(() => { statusEl.textContent = 'Ошибка загрузки таблицы. Обновите страницу.'; });
 
-    // ---------- Сканер ----------
-    const scanner = new Html5Qrcode('reader', {
-      experimentalFeatures: { useBarCodeDetectorIfSupported: true },
-      formatsToSupport: [
-        Html5QrcodeSupportedFormats.EAN_13, Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A, Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128, Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.ITF
-      ]
-    });
-    function startScanner() {
-      return scanner.start(
-        { facingMode: 'environment' },
-        { fps: 15, qrbox: { width: 300, height: 110 },
-          videoConstraints: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } },
-        onScan
-      ).then(() => {
-        // сбрасываем зум на минимум, если камера это умеет
-        try {
-          const caps = scanner.getRunningTrackCapabilities();
-          if (caps && caps.zoom && typeof caps.zoom.min !== 'undefined') {
-            scanner.applyVideoConstraints({ advanced: [{ zoom: caps.zoom.min }] }).catch(() => {});
-          }
-        } catch (e) {}
-        // если открыта карточка и мы не ждём подтверждающего скана — камера должна стоять на паузе
-        if (currentCode && mode === 'scan') scanner.pause(true);
-      }).catch(err => { statusEl.textContent = 'Не удалось открыть камеру: ' + err; });
-    }
-    startScanner();
+    // =========================================================
+    // СИНХРОНИЗАЦИЯ ОЧЕРЕДИ
+    // =========================================================
 
-    // при возврате на вкладку/из свёрнутого браузера перезапускаем камеру
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState !== 'visible') return;
-      scanner.stop().catch(() => {}).then(() => startScanner());
-    });
+    async function processQueue() {
+      if (syncBusy) return;
 
-    function onScan(text) {
-      if (!db) { statusEl.textContent = 'Данные ещё загружаются, подождите…'; return; }
-      const code = String(text).trim();
-      if (mode === 'confirm') {
-        if (code === currentCode) {
-          scanner.pause(true);
-          doAction('close', ST_DONE);
-        } else {
-          statusEl.innerHTML = '<span class="warn">Штрих-коды не совпадают!</span> Отсканируйте коробку «' + currentCode + '»';
-        }
+      if (!navigator.onLine) {
+        updateNetState();
         return;
       }
-      scanner.pause(true);
+
+      let queue = getQueue();
+
+      if (!queue.length) {
+        updateNetState();
+        return;
+      }
+
+      syncBusy = true;
+      updateNetState();
+
+      while (
+        queue.length &&
+        navigator.onLine
+      ) {
+        const item = queue[0];
+
+        try {
+          const res = await api(
+            'action=' +
+            encodeURIComponent(item.action) +
+            '&code=' +
+            encodeURIComponent(item.code)
+          );
+
+          if (!res.ok) {
+            /*
+              Сервер ответил, но само действие
+              не принял.
+
+              Не удаляем действие из очереди,
+              чтобы оно не потерялось.
+            */
+            break;
+          }
+
+          /*
+            Действие успешно записано —
+            удаляем его из очереди.
+          */
+          queue.shift();
+
+          saveQueue(queue);
+
+        } catch (e) {
+          /*
+            Нет сети / временная ошибка.
+
+            Ничего не удаляем.
+            Повторим позже.
+          */
+          break;
+        }
+      }
+
+      syncBusy = false;
+      updateNetState();
+    }
+
+
+    /*
+      Нажатие на индикатор сети =
+      ручная попытка синхронизации.
+    */
+    netState.onclick = () => {
+      processQueue();
+    };
+
+
+    // =========================================================
+    // ЗАГРУЗКА ТАБЛИЦЫ
+    // =========================================================
+
+    async function loadData() {
+
+      /*
+        Если есть локальная копия —
+        сайт сразу можно использовать.
+      */
+      if (db) {
+        statusEl.textContent =
+          navigator.onLine
+            ? 'Отсканируйте штрих-код коробки'
+            : 'Офлайн-режим. Используются сохранённые данные';
+
+        el('btnSupplies').style.display =
+          'block';
+      }
+
+      if (!navigator.onLine) {
+        if (!db) {
+          statusEl.innerHTML =
+            '<span class="warn">' +
+            'Нет интернета и нет сохранённых данных' +
+            '</span>';
+        }
+
+        return;
+      }
+
+      try {
+        const res = await api('all=1');
+
+        db = applyPendingStatuses(
+          res.all || {}
+        );
+
+        saveDbCache();
+
+        statusEl.textContent =
+          'Отсканируйте штрих-код коробки';
+
+        el('btnSupplies').style.display =
+          'block';
+
+        /*
+          После получения базы пробуем
+          отправить накопившиеся действия.
+        */
+        processQueue();
+
+      } catch (e) {
+
+        if (db) {
+          statusEl.textContent =
+            'Нет связи с сервером. Используются сохранённые данные';
+
+          el('btnSupplies').style.display =
+            'block';
+
+        } else {
+          statusEl.innerHTML =
+            '<span class="warn">' +
+            'Ошибка загрузки таблицы' +
+            '</span>';
+        }
+      }
+    }
+
+    loadData();
+
+
+    // =========================================================
+    // СКАНЕР
+    // =========================================================
+
+    const scanner = new Html5Qrcode(
+      'reader',
+      {
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        },
+
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.ITF
+        ]
+      }
+    );
+
+
+    function startScanner() {
+      return scanner.start(
+        {
+          facingMode: 'environment'
+        },
+        {
+          fps: 15,
+
+          qrbox: {
+            width: 300,
+            height: 110
+          },
+
+          videoConstraints: {
+            facingMode: 'environment',
+
+            width: {
+              ideal: 1920
+            },
+
+            height: {
+              ideal: 1080
+            }
+          }
+        },
+
+        onScan
+
+      ).then(() => {
+
+        /*
+          Если камера умеет аппаратный зум —
+          сбрасываем его на минимум.
+        */
+        try {
+          const caps =
+            scanner.getRunningTrackCapabilities();
+
+          if (
+            caps &&
+            caps.zoom &&
+            typeof caps.zoom.min !== 'undefined'
+          ) {
+            scanner
+              .applyVideoConstraints({
+                advanced: [
+                  {
+                    zoom: caps.zoom.min
+                  }
+                ]
+              })
+              .catch(() => {});
+          }
+        } catch (e) {}
+
+
+        /*
+          Если карточка уже открыта —
+          камера стоит на паузе.
+        */
+        if (
+          currentCode &&
+          mode === 'scan'
+        ) {
+          try {
+            scanner.pause(true);
+          } catch (e) {}
+        }
+
+      }).catch(err => {
+
+        statusEl.textContent =
+          'Не удалось открыть камеру: ' +
+          err;
+      });
+    }
+
+
+    startScanner();
+
+
+    // =========================================================
+    // ВОЗВРАТ В ПРИЛОЖЕНИЕ
+    // =========================================================
+
+    document.addEventListener(
+      'visibilitychange',
+      () => {
+
+        if (
+          document.visibilityState !==
+          'visible'
+        ) {
+          return;
+        }
+
+        scanner
+          .stop()
+          .catch(() => {})
+          .then(() => startScanner());
+      }
+    );
+
+
+    // =========================================================
+    // РЕЗУЛЬТАТ СКАНИРОВАНИЯ
+    // =========================================================
+
+    function onScan(text) {
+
+      if (!db) {
+        statusEl.textContent =
+          'Данные ещё не загружены';
+
+        return;
+      }
+
+      const code =
+        String(text).trim();
+
+
+      /*
+        Повторное сканирование
+        при закрытии коробки.
+      */
+      if (mode === 'confirm') {
+
+        if (code === currentCode) {
+
+          try {
+            scanner.pause(true);
+          } catch (e) {}
+
+          doAction(
+            'close',
+            ST_DONE
+          );
+
+        } else {
+
+          statusEl.innerHTML =
+            '<span class="warn">' +
+            'Штрих-коды не совпадают!' +
+            '</span> Отсканируйте коробку «' +
+            escapeHtml(currentCode) +
+            '»';
+        }
+
+        return;
+      }
+
+
+      /*
+        Обычное сканирование.
+      */
+      try {
+        scanner.pause(true);
+      } catch (e) {}
+
       currentCode = code;
+
       render();
     }
 
-    // ---------- Отрисовка карточки ----------
+
+    // =========================================================
+    // СТАТИСТИКА ПОСТАВКИ
+    // =========================================================
+
+    function supplyStats(supply) {
+
+      let total = 0;
+      let done = 0;
+      let work = 0;
+
+      for (const code in db) {
+
+        const box = db[code];
+
+        if (box.supply !== supply) {
+          continue;
+        }
+
+        total++;
+
+        if (box.status === ST_DONE) {
+          done++;
+        }
+
+        if (box.status === ST_WORK) {
+          work++;
+        }
+      }
+
+      /*
+        В общий счётчик включаем:
+
+        Закрыта
+        +
+        В процессе
+      */
+      const counted =
+        done + work;
+
+      return {
+        total,
+        done,
+        work,
+        counted
+      };
+    }
+
+
+    function getCounterClass(stats) {
+
+      /*
+        Есть хотя бы одна "В процессе" —
+        счётчик жёлтый.
+      */
+      if (stats.work > 0) {
+        return 'counter-yellow';
+      }
+
+      /*
+        Всё полностью закрыто —
+        зелёный.
+      */
+      if (
+        stats.total > 0 &&
+        stats.done === stats.total
+      ) {
+        return 'counter-green';
+      }
+
+      return 'counter-blue';
+    }
+
+
+    // =========================================================
+    // КАРТОЧКА КОРОБКИ
+    // =========================================================
+
     function render() {
+
       hideButtons();
+
       const box = db[currentCode];
+
       cardEl.style.display = 'block';
 
+
       if (!box) {
+
         statusEl.textContent = '';
-        cardEl.innerHTML = '<span class="warn">Код «' + currentCode + '» не найден в таблице</span>';
-        el('btnAgain').style.display = 'block';
-        el('btnSupplies').style.display = 'block';
+
+        cardEl.innerHTML =
+          '<span class="warn">' +
+          'Код «' +
+          escapeHtml(currentCode) +
+          '» не найден в таблице' +
+          '</span>';
+
+        el('btnAgain').style.display =
+          'block';
+
+        el('btnSupplies').style.display =
+          'block';
+
         return;
       }
 
-      const cls = box.status === ST_DONE ? 'st-done' : box.status === ST_WORK ? 'st-work' : 'st-new';
-      const stats = supplyStats(box.supply);
-      let html = '<div class="badge-row"><span class="badge ' + cls + '">' + box.status + '</span>' +
-        '<span class="counter" onclick="toggleSupply()">Закрыто ' + stats.done + '/' + stats.total + '</span></div><table>';
-      for (const k in box.info) html += '<tr><td>' + k + '</td><td>' + box.info[k] + '</td></tr>';
-      cardEl.innerHTML = html + '</table><div id="supplyList" style="display:none"></div>';
+
+      const badgeClass =
+        box.status === ST_DONE
+          ? 'st-done'
+          : box.status === ST_WORK
+            ? 'st-work'
+            : 'st-new';
+
+
+      const stats =
+        supplyStats(box.supply);
+
+
+      const counterClass =
+        getCounterClass(stats);
+
+
+      let html =
+        '<div class="badge-row">' +
+
+          '<span class="badge ' +
+          badgeClass +
+          '">' +
+          escapeHtml(box.status) +
+          '</span>' +
+
+          '<span class="counter ' +
+          counterClass +
+          '" onclick="toggleSupply()">' +
+
+          'Закрыто ' +
+          stats.counted +
+          '/' +
+          stats.total +
+
+          '</span>' +
+
+        '</div>' +
+
+        '<table>';
+
+
+      for (const k in box.info) {
+
+        html +=
+          '<tr>' +
+
+            '<td>' +
+            escapeHtml(k) +
+            '</td>' +
+
+            '<td>' +
+            escapeHtml(box.info[k]) +
+            '</td>' +
+
+          '</tr>';
+      }
+
+
+      html +=
+        '</table>' +
+
+        '<div ' +
+        'id="supplyList" ' +
+        'style="display:none">' +
+        '</div>';
+
+
+      cardEl.innerHTML = html;
+
       statusEl.textContent = '';
 
+
       if (box.status === ST_NEW) {
-        el('btnStart').style.display = 'block';
-      } else if (box.status === ST_WORK) {
-        statusEl.innerHTML = '<span class="hint">Положите товары в коробку, запакуйте и наклейте стикер</span>';
-        el('btnClose').style.display = 'block';
+
+        el('btnStart').style.display =
+          'block';
+
+
+      } else if (
+        box.status === ST_WORK
+      ) {
+
+        statusEl.innerHTML =
+          '<span class="hint">' +
+          'Положите товары в коробку, запакуйте и наклейте стикер' +
+          '</span>';
+
+        el('btnClose').style.display =
+          'block';
+
+
       } else {
-        statusEl.textContent = 'Коробка уже закрыта';
+
+        statusEl.textContent =
+          'Коробка уже закрыта';
       }
-      el('btnAgain').style.display = 'block';
-      el('btnSupplies').style.display = 'block';
+
+
+      el('btnAgain').style.display =
+        'block';
+
+      el('btnSupplies').style.display =
+        'block';
     }
+
+
+    // =========================================================
+    // СКРЫТИЕ КНОПОК
+    // =========================================================
 
     function hideButtons() {
-      ['btnStart', 'btnClose', 'btnCancel', 'btnAgain', 'btnSupplies'].forEach(id => el(id).style.display = 'none');
-      el('allSupplies').style.display = 'none';
+
+      [
+        'btnStart',
+        'btnClose',
+        'btnCancel',
+        'btnAgain',
+        'btnSupplies'
+      ].forEach(id => {
+
+        el(id).style.display =
+          'none';
+      });
+
+      el('allSupplies').style.display =
+        'none';
     }
 
-    function supplyStats(supply) {
-      let total = 0, done = 0;
-      for (const code in db) {
-        if (db[code].supply === supply) {
-          total++;
-          if (db[code].status === ST_DONE) done++;
-        }
-      }
-      return { total: total, done: done };
-    }
+
+    // =========================================================
+    // КОРОБКИ ОДНОЙ ПОСТАВКИ
+    // =========================================================
 
     function supplyBoxesHtml(supply) {
+
       let html = '<table>';
-      for (const code in db) {
+
+      /*
+        Сортируем коробки внутри поставки
+        по коду.
+      */
+      const codes =
+        Object.keys(db)
+          .filter(code =>
+            db[code].supply === supply
+          )
+          .sort((a, b) =>
+            a.localeCompare(
+              b,
+              'ru',
+              {
+                numeric: true,
+                sensitivity: 'base'
+              }
+            )
+          );
+
+
+      for (const code of codes) {
+
         const b = db[code];
-        if (b.supply !== supply) continue;
-        const c = b.status === ST_DONE ? 'st-done' : b.status === ST_WORK ? 'st-work' : 'st-new';
-        html += '<tr><td>' + code + '<br><small style="color:#666">' + (b.article || '—') +
-                ' — ' + (b.qty || '?') + ' шт.</small></td>' +
-                '<td style="text-align:right"><span class="badge ' + c + '">' + b.status + '</span></td></tr>';
+
+        const badgeClass =
+          b.status === ST_DONE
+            ? 'st-done'
+            : b.status === ST_WORK
+              ? 'st-work'
+              : 'st-new';
+
+
+        html +=
+          '<tr>' +
+
+            '<td>' +
+
+              escapeHtml(code) +
+
+              '<br>' +
+
+              '<small style="color:#666">' +
+
+                escapeHtml(
+                  b.article || '—'
+                ) +
+
+                ' — ' +
+
+                escapeHtml(
+                  b.qty || '?'
+                ) +
+
+                ' шт.' +
+
+              '</small>' +
+
+            '</td>' +
+
+            '<td style="text-align:right">' +
+
+              '<span class="badge ' +
+              badgeClass +
+              '">' +
+
+              escapeHtml(b.status) +
+
+              '</span>' +
+
+            '</td>' +
+
+          '</tr>';
       }
+
+
       return html + '</table>';
     }
 
+
+    // =========================================================
+    // РАСКРЫТИЕ ПОСТАВКИ
+    // =========================================================
+
     function toggleSupply() {
-      const listEl = el('supplyList');
-      if (listEl.style.display === 'block') { listEl.style.display = 'none'; return; }
-      const supply = db[currentCode].supply;
-      listEl.innerHTML = '<b>Коробки поставки «' + supply + '»</b>' + supplyBoxesHtml(supply);
-      listEl.style.display = 'block';
+
+      const listEl =
+        el('supplyList');
+
+
+      if (
+        listEl.style.display ===
+        'block'
+      ) {
+
+        listEl.style.display =
+          'none';
+
+        return;
+      }
+
+
+      const supply =
+        db[currentCode].supply;
+
+
+      listEl.innerHTML =
+        '<b>' +
+        'Коробки поставки «' +
+        escapeHtml(supply) +
+        '»' +
+        '</b>' +
+
+        supplyBoxesHtml(supply);
+
+
+      listEl.style.display =
+        'block';
     }
 
-    // ---------- Действия ----------
-    function doAction(action, newStatus) {
-      statusEl.textContent = 'Сохраняю…';
-      hideButtons();
-      api('action=' + action + '&code=' + encodeURIComponent(currentCode))
-        .then(res => {
-          if (res.ok) {
-            db[currentCode].status = newStatus;
-            mode = 'scan';
-            render();
-          } else {
-            statusEl.innerHTML = '<span class="warn">' + (res.error || 'ошибка') + '</span>';
-            el('btnAgain').style.display = 'block';
-            el('btnSupplies').style.display = 'block';
-          }
-        })
-        .catch(() => {
-          statusEl.innerHTML = '<span class="warn">Нет связи, попробуйте ещё раз</span>';
-          render();
-        });
+
+    // =========================================================
+    // ИЗМЕНЕНИЕ СТАТУСА
+    //
+    // ГЛАВНОЕ ИЗМЕНЕНИЕ:
+    //
+    // пользователь НЕ ждёт ответа сервера.
+    //
+    // 1. Меняем статус локально
+    // 2. Сразу перерисовываем интерфейс
+    // 3. Записываем действие в очередь
+    // 4. Отправляем очередь в фоне
+    //
+    // =========================================================
+
+    function doAction(
+      action,
+      newStatus
+    ) {
+
+      const code =
+        currentCode;
+
+
+      if (
+        !db ||
+        !db[code]
+      ) {
+        return;
+      }
+
+
+      /*
+        Мгновенно меняем статус
+        в локальной базе.
+      */
+      db[code].status =
+        newStatus;
+
+
+      /*
+        Сохраняем его для офлайн-режима.
+      */
+      saveDbCache();
+
+
+      /*
+        Добавляем серверное действие
+        в очередь.
+      */
+      addToQueue(
+        action,
+        code,
+        newStatus
+      );
+
+
+      /*
+        Пользователь сразу видит
+        следующий этап.
+      */
+      mode = 'scan';
+
+      render();
+
+
+      /*
+        Серверная запись идёт в фоне.
+        Интерфейс её НЕ ждёт.
+      */
+      processQueue();
     }
 
-    el('btnStart').onclick = () => doAction('start', ST_WORK);
 
-    el('btnClose').onclick = () => {
-      mode = 'confirm';
-      hideButtons();
-      el('btnCancel').style.display = 'block';
-      statusEl.innerHTML = '<span class="hint">Для закрытия отсканируйте штрих-код коробки «' + currentCode + '» ещё раз</span>';
-      scanner.resume();
+    // =========================================================
+    // НАЧАТЬ ЗАПАКОВКУ
+    // =========================================================
+
+    el('btnStart').onclick = () => {
+
+      doAction(
+        'start',
+        ST_WORK
+      );
     };
 
+
+    // =========================================================
+    // ЗАКРЫТЬ КОРОБКУ
+    // =========================================================
+
+    el('btnClose').onclick = () => {
+
+      mode = 'confirm';
+
+      hideButtons();
+
+      el('btnCancel').style.display =
+        'block';
+
+
+      statusEl.innerHTML =
+        '<span class="hint">' +
+
+        'Для закрытия отсканируйте штрих-код коробки «' +
+
+        escapeHtml(currentCode) +
+
+        '» ещё раз' +
+
+        '</span>';
+
+
+      try {
+        scanner.resume();
+      } catch (e) {}
+    };
+
+
+    // =========================================================
+    // ОТМЕНА ЗАКРЫТИЯ
+    // =========================================================
+
     el('btnCancel').onclick = () => {
+
       mode = 'scan';
-      scanner.pause(true);
+
+      try {
+        scanner.pause(true);
+      } catch (e) {}
+
       render();
     };
 
+
+    // =========================================================
+    // ДРУГАЯ КОРОБКА
+    // =========================================================
+
     el('btnAgain').onclick = () => {
+
       mode = 'scan';
+
       currentCode = null;
-      cardEl.style.display = 'none';
+
+      cardEl.style.display =
+        'none';
+
       hideButtons();
-      statusEl.textContent = 'Отсканируйте штрих-код коробки';
-      el('btnSupplies').style.display = 'block';
-      scanner.resume();
+
+
+      statusEl.textContent =
+        navigator.onLine
+          ? 'Отсканируйте штрих-код коробки'
+          : 'Офлайн-режим. Отсканируйте штрих-код коробки';
+
+
+      el('btnSupplies').style.display =
+        'block';
+
+
+      try {
+        scanner.resume();
+      } catch (e) {}
     };
 
+
+    // =========================================================
+    // ВСЕ ПОСТАВКИ
+    // =========================================================
+
     el('btnSupplies').onclick = () => {
-      const panel = el('allSupplies');
-      if (panel.style.display === 'block') { panel.style.display = 'none'; return; }
+
+      const panel =
+        el('allSupplies');
+
+
+      if (
+        panel.style.display ===
+        'block'
+      ) {
+
+        panel.style.display =
+          'none';
+
+        return;
+      }
+
+
+      if (!db) return;
+
+
       const stats = {};
+
+
       for (const code in db) {
+
         const b = db[code];
-        const st = (stats[b.supply] = stats[b.supply] || { total: 0, done: 0, clusters: [] });
+
+        const supplyName =
+          b.supply || 'Без поставки';
+
+
+        const st =
+          stats[supplyName] =
+          stats[supplyName] || {
+            total: 0,
+            done: 0,
+            work: 0,
+            clusters: []
+          };
+
+
         st.total++;
-        if (b.status === ST_DONE) st.done++;
-        if (b.cluster && st.clusters.indexOf(b.cluster) === -1) st.clusters.push(b.cluster);
+
+
+        if (
+          b.status === ST_DONE
+        ) {
+          st.done++;
+        }
+
+
+        if (
+          b.status === ST_WORK
+        ) {
+          st.work++;
+        }
+
+
+        if (
+          b.cluster &&
+          !st.clusters.includes(
+            b.cluster
+          )
+        ) {
+
+          st.clusters.push(
+            b.cluster
+          );
+        }
       }
-      let html = '<b>Все поставки</b>';
-      for (const s in stats) {
-        const st = stats[s];
-        const cls = st.done === st.total ? 'sup-green' : 'sup-red';
-        html += '<div class="sup-row" data-supply="' + s + '">«' + s + '» — <span class="' + cls +
-                '">Закрыто ' + st.done + '/' + st.total + '</span>' +
-                (st.clusters.length ? '<br><small style="color:#666">' + st.clusters.join(', ') + '</small>' : '') +
-                '</div><div class="sup-detail" style="display:none"></div>';
+
+
+      let html =
+        '<b>Все поставки</b>';
+
+
+      /*
+        СОРТИРОВКА ПО АЛФАВИТУ
+      */
+      const supplyNames =
+        Object.keys(stats)
+          .sort((a, b) =>
+            a.localeCompare(
+              b,
+              'ru',
+              {
+                numeric: true,
+                sensitivity: 'base'
+              }
+            )
+          );
+
+
+      for (
+        const supplyName
+        of supplyNames
+      ) {
+
+        const st =
+          stats[supplyName];
+
+
+        /*
+          В счётчик включаем:
+          Закрыта + В процессе
+        */
+        const counted =
+          st.done + st.work;
+
+
+        let statusClass;
+
+
+        /*
+          Есть "В процессе" —
+          жёлтый счётчик.
+        */
+        if (st.work > 0) {
+
+          statusClass =
+            'sup-yellow';
+
+
+        /*
+          Все полностью закрыты —
+          зелёный.
+        */
+        } else if (
+          st.done === st.total
+        ) {
+
+          statusClass =
+            'sup-green';
+
+
+        /*
+          Иначе красный.
+        */
+        } else {
+
+          statusClass =
+            'sup-red';
+        }
+
+
+        html +=
+          '<div ' +
+          'class="sup-row" ' +
+          'data-supply="' +
+          escapeHtml(supplyName) +
+          '">' +
+
+            '«' +
+            escapeHtml(supplyName) +
+            '» — ' +
+
+            '<span class="' +
+            statusClass +
+            '">' +
+
+              'Закрыто ' +
+              counted +
+              '/' +
+              st.total +
+
+            '</span>' +
+
+
+            (
+              st.clusters.length
+                ?
+                  '<br>' +
+                  '<small style="color:#666">' +
+                  escapeHtml(
+                    st.clusters.join(', ')
+                  ) +
+                  '</small>'
+                :
+                  ''
+            ) +
+
+          '</div>' +
+
+          '<div ' +
+          'class="sup-detail" ' +
+          'style="display:none">' +
+          '</div>';
       }
+
+
       panel.innerHTML = html;
-      panel.querySelectorAll('.sup-row').forEach(row => {
-        row.onclick = () => {
-          const det = row.nextElementSibling;
-          if (det.style.display === 'block') { det.style.display = 'none'; return; }
-          det.innerHTML = supplyBoxesHtml(row.dataset.supply);
-          det.style.display = 'block';
-        };
-      });
-      panel.style.display = 'block';
+
+
+      panel
+        .querySelectorAll(
+          '.sup-row'
+        )
+        .forEach(row => {
+
+          row.onclick = () => {
+
+            const det =
+              row.nextElementSibling;
+
+
+            if (
+              det.style.display ===
+              'block'
+            ) {
+
+              det.style.display =
+                'none';
+
+              return;
+            }
+
+
+            det.innerHTML =
+              supplyBoxesHtml(
+                row.dataset.supply
+              );
+
+
+            det.style.display =
+              'block';
+          };
+        });
+
+
+      panel.style.display =
+        'block';
     };
-    
+
+
+    // =========================================================
+    // СОБЫТИЯ СЕТИ
+    // =========================================================
+
+    window.addEventListener(
+      'offline',
+      () => {
+
+        updateNetState();
+
+        if (!currentCode) {
+          statusEl.textContent =
+            'Офлайн-режим. Изменения будут сохранены и отправлены позже';
+        }
+      }
+    );
+
+
+    window.addEventListener(
+      'online',
+      async () => {
+
+        updateNetState();
+
+        /*
+          Сначала отправляем все
+          накопившиеся действия.
+        */
+        await processQueue();
+
+
+        /*
+          Потом тихо пытаемся получить
+          свежую таблицу.
+        */
+        try {
+
+          const res =
+            await api('all=1');
+
+
+          db =
+            applyPendingStatuses(
+              res.all || {}
+            );
+
+
+          saveDbCache();
+
+
+          if (
+            currentCode &&
+            db[currentCode]
+          ) {
+            render();
+          }
+
+        } catch (e) {}
+
+
+        updateNetState();
+      }
+    );
+
+
+    updateNetState();
+
+
+    // =========================================================
+    // PWA / SERVICE WORKER
+    // =========================================================
+
+    if (
+      'serviceWorker' in navigator
+    ) {
+
+      window.addEventListener(
+        'load',
+        () => {
+
+          navigator
+            .serviceWorker
+            .register('./sw.js')
+            .catch(() => {});
+        }
+      );
+    }
+
   </script>
+
 </body>
 </html>
