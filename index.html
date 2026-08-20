@@ -1067,48 +1067,7 @@ document.addEventListener(
     }
   }
 );
-  if (cameraRestarting) return;
-
-  cameraRestarting = true;
-
-  try {
-    /*
-      После возврата из свёрнутого браузера
-      полностью пересоздаём поток камеры.
-    */
-    await scanner
-      .stop()
-      .catch(() => {});
-
-    /*
-      На телефонах камере иногда нужно немного времени,
-      чтобы браузер освободил старый поток.
-    */
-    await new Promise(resolve =>
-      setTimeout(resolve, 250)
-    );
-
-    await startScanner();
-
-  } finally {
-    cameraRestarting = false;
-  }
-}
-
-document.addEventListener(
-  'visibilitychange',
-  () => {
-
-    if (
-      document.visibilityState ===
-      'visible'
-    ) {
-      restartCameraAfterReturn();
-    }
-  }
-);
-
-
+  
     // =========================================================
     // РЕЗУЛЬТАТ СКАНИРОВАНИЯ
     // =========================================================
@@ -1340,22 +1299,19 @@ scanner
 
 for (const k in box.info) {
 
+  html +=
+    '<tr>' +
 
-      for (const k in box.info) {
+      '<td>' +
+      escapeHtml(k) +
+      '</td>' +
 
-        html +=
-          '<tr>' +
+      '<td>' +
+      escapeHtml(box.info[k]) +
+      '</td>' +
 
-            '<td>' +
-            escapeHtml(k) +
-            '</td>' +
-
-            '<td>' +
-            escapeHtml(box.info[k]) +
-            '</td>' +
-
-          '</tr>';
-      }
+    '</tr>';
+}
 
 
       html +=
