@@ -269,6 +269,78 @@
       font-size: 12px;
     }
 
+    /* ===== СПИСОК КОРОБОК В ПОСТАВКЕ ===== */
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+#card,
+#allSupplies {
+  overflow-x: hidden;
+}
+
+.box-list-table {
+  width: 100%;
+  max-width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.box-list-table td {
+  padding: 10px 4px;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+/*
+  Левая колонка — номер этикетки и товар.
+  Убираем white-space: nowrap, который раньше
+  выталкивал статус за правый край.
+*/
+.box-list-table td:first-child {
+  width: auto;
+  white-space: normal !important;
+  padding-right: 8px !important;
+}
+
+/*
+  Для статуса всегда оставляем место
+  внутри ширины экрана.
+*/
+.box-list-table td:last-child {
+  width: 105px;
+  text-align: center !important;
+}
+
+/*
+  Разделитель между коробками.
+*/
+.box-list-table tr:not(:last-child) td {
+  border-bottom: 1px solid #ddd;
+}
+
+/*
+  Плашка может переносить текст,
+  поэтому "В процессе" никогда
+  не вылезет за экран.
+*/
+.box-list-table .badge {
+  display: flex;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  white-space: normal;
+  line-height: 1.15;
+  padding: 5px 5px;
+}
+
     /* ===== ВСЕ ПОСТАВКИ ===== */
 
     #allSupplies {
@@ -913,7 +985,7 @@
           mode === 'scan'
         ) {
           try {
-            scanner.pause(true);
+            scanner.pause(false);
           } catch (e) {}
         }
 
@@ -933,23 +1005,49 @@
     // ВОЗВРАТ В ПРИЛОЖЕНИЕ
     // =========================================================
 
-    document.addEventListener(
-      'visibilitychange',
-      () => {
+    let cameraRestarting = false;
 
-        if (
-          document.visibilityState !==
-          'visible'
-        ) {
-          return;
-        }
+async function restartCameraAfterReturn() {
+  if (cameraRestarting) return;
 
-        scanner
-          .stop()
-          .catch(() => {})
-          .then(() => startScanner());
-      }
+  cameraRestarting = true;
+
+  try {
+    /*
+      После возврата из свёрнутого браузера
+      полностью пересоздаём поток камеры.
+    */
+    await scanner
+      .stop()
+      .catch(() => {});
+
+    /*
+      На телефонах камере иногда нужно немного времени,
+      чтобы браузер освободил старый поток.
+    */
+    await new Promise(resolve =>
+      setTimeout(resolve, 250)
     );
+
+    await startScanner();
+
+  } finally {
+    cameraRestarting = false;
+  }
+}
+
+document.addEventListener(
+  'visibilitychange',
+  () => {
+
+    if (
+      document.visibilityState ===
+      'visible'
+    ) {
+      restartCameraAfterReturn();
+    }
+  }
+);
 
 
     // =========================================================
@@ -978,7 +1076,7 @@
         if (code === currentCode) {
 
           try {
-            scanner.pause(true);
+            scanner.pause(false);
           } catch (e) {}
 
           doAction(
@@ -1004,7 +1102,7 @@
         Обычное сканирование.
       */
       try {
-        scanner.pause(true);
+        scanner.pause(false);
       } catch (e) {}
 
       currentCode = code;
@@ -1255,7 +1353,7 @@
 
     function supplyBoxesHtml(supply) {
 
-      let html = '<table>';
+  let html = '<table class="box-list-table">';
 
       /*
         Сортируем коробки внутри поставки
@@ -1505,7 +1603,7 @@
       mode = 'scan';
 
       try {
-        scanner.pause(true);
+        scanner.pause(false);
       } catch (e) {}
 
       render();
@@ -1628,18 +1726,86 @@
       /*
         СОРТИРОВКА ПО АЛФАВИТУ
       */
-      const supplyNames =
-        Object.keys(stats)
-          .sort((a, b) =>
-            a.localeCompare(
-              b,
-              'ru',
-              {
-                numeric: true,
-                sensitivity: 'base'
-              }
-            )
-          );
+      /*
+  Сначала сами названия кластеров
+  сортируем А → Я.
+*/
+for (const supplyName in stats) {
+  stats[supplyName].clusters.sort(
+    (a, b) =>
+      a.localeCompare(
+        b,
+        'ru',
+        {
+          numeric: true,
+          sensitivity: 'base'
+        }
+      )
+  );
+}
+
+
+/*
+  Все поставки сортируем уже
+  НЕ по названию поставки,
+  а по названию кластера А → Я.
+
+  Если у поставки несколько кластеров,
+  для сортировки берётся первый
+  по алфавиту.
+
+  Поставки без кластера идут в конце.
+*/
+const supplyNames =
+  Object.keys(stats)
+    .sort((a, b) => {
+
+      const clusterA =
+        stats[a].clusters[0] || '';
+
+      const clusterB =
+        stats[b].clusters[0] || '';
+
+
+      if (!clusterA && clusterB) {
+        return 1;
+      }
+
+      if (clusterA && !clusterB) {
+        return -1;
+      }
+
+
+      const clusterCompare =
+        clusterA.localeCompare(
+          clusterB,
+          'ru',
+          {
+            numeric: true,
+            sensitivity: 'base'
+          }
+        );
+
+
+      /*
+        Если кластер одинаковый —
+        внутри него поставки сортируем
+        по названию.
+      */
+      if (clusterCompare !== 0) {
+        return clusterCompare;
+      }
+
+
+      return a.localeCompare(
+        b,
+        'ru',
+        {
+          numeric: true,
+          sensitivity: 'base'
+        }
+      );
+    });
 
 
       for (
