@@ -341,6 +341,39 @@ body {
   padding: 5px 5px;
 }
 
+    .box-code {
+  display: inline-block;
+  max-width: 100%;
+  padding: 3px 0;
+  font-weight: 700;
+  color: #1a73e8;
+  text-decoration: underline;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.box-barcode {
+  display: none;
+  width: 100%;
+  margin-top: 9px;
+  padding: 8px 4px;
+  background: #fff;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.box-barcode.open {
+  display: block;
+}
+
+.box-barcode svg {
+  display: block;
+  width: 100%;
+  max-width: 230px;
+  height: auto;
+}
+    
     /* ===== ВСЕ ПОСТАВКИ ===== */
 
     #allSupplies {
@@ -484,6 +517,7 @@ body {
 
 
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
 
   <script>
     // =========================================================
@@ -1431,11 +1465,21 @@ for (const k in box.info) {
 
             '<td>' +
 
-              escapeHtml(code) +
+  '<span class="box-code" data-code="' +
+  escapeHtml(code) +
+  '">' +
+    escapeHtml(code) +
+  '</span>' +
 
-              '<br>' +
+  '<div class="box-barcode" data-barcode="' +
+  escapeHtml(code) +
+  '">' +
+    '<svg></svg>' +
+  '</div>' +
 
-              '<small style="color:#666">' +
+  '<br>' +
+
+  '<small style="color:#666">' +
 
                 escapeHtml(
                   b.article || '—'
@@ -1471,6 +1515,120 @@ for (const k in box.info) {
 
       return html + '</table>';
     }
+
+    // =========================================================
+// ШТРИХКОД КОРОБКИ В СПИСКЕ
+// =========================================================
+
+document.addEventListener(
+  'click',
+  event => {
+
+    const codeEl =
+      event.target.closest('.box-code');
+
+    if (!codeEl) {
+      return;
+    }
+
+
+    const cell =
+      codeEl.closest('td');
+
+    if (!cell) {
+      return;
+    }
+
+
+    const barcodeEl =
+      cell.querySelector('.box-barcode');
+
+    if (!barcodeEl) {
+      return;
+    }
+
+
+    /*
+      Если уже открыт — просто закрываем.
+    */
+    if (
+      barcodeEl.classList.contains('open')
+    ) {
+      barcodeEl.classList.remove('open');
+      return;
+    }
+
+
+    /*
+      Закрываем другой открытый штрихкод,
+      чтобы список не становился огромным.
+    */
+    document
+      .querySelectorAll('.box-barcode.open')
+      .forEach(item => {
+        item.classList.remove('open');
+      });
+
+
+    barcodeEl.classList.add('open');
+
+
+    /*
+      Генерируем штрихкод только один раз.
+    */
+    if (
+      barcodeEl.dataset.rendered === '1'
+    ) {
+      return;
+    }
+
+
+    const svg =
+      barcodeEl.querySelector('svg');
+
+    const code =
+      barcodeEl.dataset.barcode;
+
+
+    try {
+
+      JsBarcode(
+        svg,
+        code,
+        {
+          format: 'CODE128',
+
+          /*
+            Достаточно тонкий, чтобы
+            помещался на экране телефона.
+          */
+          width: 1.7,
+          height: 65,
+
+          /*
+            Сам номер уже написан сверху,
+            поэтому под штрихкодом его
+            второй раз не выводим.
+          */
+          displayValue: false,
+
+          margin: 0
+        }
+      );
+
+
+      barcodeEl.dataset.rendered =
+        '1';
+
+    } catch (e) {
+
+      barcodeEl.innerHTML =
+        '<span class="warn">' +
+        'Не удалось создать штрихкод' +
+        '</span>';
+    }
+  }
+);
 
 
     // =========================================================
