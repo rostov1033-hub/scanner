@@ -1,5 +1,5 @@
 const CACHE_NAME =
-  'box-scanner-v4';
+  'box-scanner-v5';
 
 const LOCAL_FILES = [
   './',
@@ -10,6 +10,9 @@ const LOCAL_FILES = [
 
 const QR_LIBRARY =
   'https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js';
+
+const BARCODE_LIBRARY =
+  'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js';
 
 
 /*
@@ -48,6 +51,12 @@ self.addEventListener(
             QR_LIBRARY
           );
         } catch (e) {}
+
+        try {
+  await cache.add(
+    BARCODE_LIBRARY
+  );
+} catch (e) {}
 
 
         self.skipWaiting();
