@@ -354,24 +354,40 @@ body {
 }
 
 .box-barcode {
-  display: none;
   width: 100%;
-  margin-top: 9px;
-  padding: 8px 4px;
+  padding: 10px 0 6px;
   background: #fff;
-  border-radius: 6px;
   overflow: hidden;
 }
 
-.box-barcode.open {
-  display: block;
+.barcode-row {
+  display: none;
+}
+
+.barcode-row.open {
+  display: table-row;
+}
+
+.barcode-row td {
+  width: 100% !important;
+  padding: 0 4px 12px !important;
+  border-bottom: 1px solid #ddd !important;
 }
 
 .box-barcode svg {
   display: block;
-  width: 100%;
-  max-width: 230px;
-  height: auto;
+  width: 100% !important;
+  max-width: none !important;
+  height: auto !important;
+
+  /*
+    Не даём браузеру размывать границы полос.
+  */
+  shape-rendering: crispEdges;
+}
+
+.box-barcode svg rect {
+  shape-rendering: crispEdges;
 }
     
     /* ===== ВСЕ ПОСТАВКИ ===== */
@@ -1461,55 +1477,66 @@ for (const k in box.info) {
 
 
         html +=
-          '<tr>' +
+  '<tr class="box-main-row">' +
 
-            '<td>' +
+    '<td>' +
 
-  '<span class="box-code" data-code="' +
+      '<span class="box-code" data-code="' +
+      escapeHtml(code) +
+      '">' +
+        escapeHtml(code) +
+      '</span>' +
+
+      '<br>' +
+
+      '<small style="color:#666">' +
+
+        escapeHtml(
+          b.article || '—'
+        ) +
+
+        ' — ' +
+
+        escapeHtml(
+          b.qty || '?'
+        ) +
+
+        ' шт.' +
+
+      '</small>' +
+
+    '</td>' +
+
+    '<td style="text-align:center">' +
+
+      '<span class="badge ' +
+      badgeClass +
+      '">' +
+
+        escapeHtml(b.status) +
+
+      '</span>' +
+
+    '</td>' +
+
+  '</tr>' +
+
+  /*
+    Отдельная строка на всю ширину таблицы.
+  */
+  '<tr class="barcode-row" data-barcode="' +
   escapeHtml(code) +
   '">' +
-    escapeHtml(code) +
-  '</span>' +
 
-  '<div class="box-barcode" data-barcode="' +
-  escapeHtml(code) +
-  '">' +
-    '<svg></svg>' +
-  '</div>' +
+    '<td colspan="2">' +
 
-  '<br>' +
+      '<div class="box-barcode">' +
+        '<svg></svg>' +
+      '</div>' +
 
-  '<small style="color:#666">' +
+    '</td>' +
 
-                escapeHtml(
-                  b.article || '—'
-                ) +
-
-                ' — ' +
-
-                escapeHtml(
-                  b.qty || '?'
-                ) +
-
-                ' шт.' +
-
-              '</small>' +
-
-            '</td>' +
-
-            '<td style="text-align:right">' +
-
-              '<span class="badge ' +
-              badgeClass +
-              '">' +
-
-              escapeHtml(b.status) +
-
-              '</span>' +
-
-            '</td>' +
-
-          '</tr>';
+  '</tr>';
       }
 
 
@@ -1526,6 +1553,135 @@ document.addEventListener(
 
     const codeEl =
       event.target.closest('.box-code');
+
+    if (!codeEl) {
+      return;
+    }
+
+
+    const mainRow =
+      codeEl.closest('tr');
+
+    if (!mainRow) {
+      return;
+    }
+
+
+    /*
+      Строка со штрихкодом находится
+      сразу под строкой коробки.
+    */
+    const barcodeRow =
+      mainRow.nextElementSibling;
+
+    if (
+      !barcodeRow ||
+      !barcodeRow.classList.contains(
+        'barcode-row'
+      )
+    ) {
+      return;
+    }
+
+
+    /*
+      Повторное нажатие —
+      закрываем штрихкод.
+    */
+    if (
+      barcodeRow.classList.contains('open')
+    ) {
+      barcodeRow.classList.remove('open');
+      return;
+    }
+
+
+    /*
+      Закрываем ранее открытый штрихкод.
+    */
+    document
+      .querySelectorAll('.barcode-row.open')
+      .forEach(row => {
+        row.classList.remove('open');
+      });
+
+
+    barcodeRow.classList.add('open');
+
+
+    /*
+      Если уже рисовали его раньше,
+      второй раз не генерируем.
+    */
+    if (
+      barcodeRow.dataset.rendered === '1'
+    ) {
+      return;
+    }
+
+
+    const svg =
+      barcodeRow.querySelector('svg');
+
+    const code =
+      barcodeRow.dataset.barcode;
+
+
+    try {
+
+      JsBarcode(
+        svg,
+        code,
+        {
+          format: 'CODE128',
+
+          /*
+            Целое значение вместо 1.7:
+            линии получаются намного чётче.
+          */
+          width: 2,
+
+          /*
+            Более высокий штрихкод
+            легче считывается камерой.
+          */
+          height: 90,
+
+          /*
+            Чистый чёрный на белом.
+          */
+          lineColor: '#000000',
+          background: '#ffffff',
+
+          displayValue: false,
+          margin: 0
+        }
+      );
+
+
+      /*
+        Растягиваем SVG на всю доступную ширину.
+        shape-rendering выше не даёт линиям
+        становиться серыми при масштабировании.
+      */
+      svg.style.width = '100%';
+      svg.style.maxWidth = 'none';
+
+
+      barcodeRow.dataset.rendered =
+        '1';
+
+    } catch (e) {
+
+      barcodeRow
+        .querySelector('.box-barcode')
+        .innerHTML =
+          '<span class="warn">' +
+          'Не удалось создать штрихкод' +
+          '</span>';
+    }
+  }
+);
 
     if (!codeEl) {
       return;
