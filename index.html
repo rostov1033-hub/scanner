@@ -1355,6 +1355,27 @@ function playSuccess() {
 */
 function playError() {
 
+  /*
+    Вибрация при ошибочном сканировании.
+    Работает на устройствах, где браузер
+    поддерживает navigator.vibrate().
+  */
+  if (
+    'vibrate' in navigator
+  ) {
+    navigator.vibrate([
+      180,
+      80,
+      180,
+      80,
+      300
+    ]);
+  }
+
+
+  /*
+    Резкий неприятный звук ошибки.
+  */
   beep(
     420,
     130,
