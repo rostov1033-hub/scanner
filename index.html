@@ -75,60 +75,199 @@
 
     /* ===== СКАНЕР ===== */
 
-    #reader-wrap {
-      max-width: 420px;
-      height: 150px;
-      margin: 0 auto;
-      border-radius: 12px;
-      overflow: hidden;
-      position: relative;
-      background: #000;
-      box-shadow: 0 1px 5px rgba(0,0,0,.15);
-    }
+  /* ===== ВЫБОР СКАНЕРА ===== */
 
-    #reader {
-      width: 100%;
-      height: 150px;
-      border: none !important;
-    }
+.scan-mode-switch {
+  display: flex;
+  gap: 6px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto 8px;
+}
 
-    #reader video {
-      width: 100% !important;
-      height: 150px !important;
-      object-fit: cover;
-    }
+.scan-mode-btn {
+  flex: 1;
+  display: flex !important;
+  width: auto !important;
+  max-width: none !important;
+  min-height: 38px !important;
+  margin: 0 !important;
+  padding: 8px 12px !important;
 
-    /*
-      Убираем стандартные углы / рамку html5-qrcode
-    */
-    #reader #qr-shaded-region {
-      border: none !important;
-      box-shadow: none !important;
-    }
+  justify-content: center;
+  align-items: center;
 
-    #reader #qr-shaded-region > div {
-      display: none !important;
-    }
+  border-radius: 9px !important;
+  background: #dedede !important;
+  color: #444 !important;
 
-    /*
-      Красная линия сканирования
-    */
-    #reader-wrap::after {
-      content: "";
-      position: absolute;
-      z-index: 20;
-      top: 50%;
-      left: 7%;
-      right: 7%;
-      height: 2px;
-      transform: translateY(-50%);
-      background: #ff2d2d;
-      border-radius: 2px;
-      box-shadow:
-        0 0 4px rgba(255,45,45,.9),
-        0 0 9px rgba(255,45,45,.45);
-      pointer-events: none;
-    }
+  font-size: 14px !important;
+  font-weight: 600;
+}
+
+.scan-mode-btn.active {
+  background: #1a73e8 !important;
+  color: #fff !important;
+}
+
+
+/* ===== ТСД ===== */
+
+#tsd-wrap {
+  width: 100%;
+  max-width: 420px;
+  min-height: 62px;
+
+  margin: 0 auto;
+
+  padding: 8px 10px;
+
+  background: #fff;
+
+  border: 2px solid #1a73e8;
+  border-radius: 10px;
+
+  box-shadow: 0 1px 4px rgba(0,0,0,.10);
+}
+
+#tsdHint {
+  display: block;
+
+  margin-bottom: 5px;
+
+  text-align: center;
+
+  color: #666;
+
+  font-size: 12px;
+  font-weight: 600;
+}
+
+#tsdInput {
+  display: block;
+
+  width: 100%;
+  height: 34px;
+
+  padding: 4px 8px;
+
+  border: 1px solid #ddd;
+  border-radius: 6px;
+
+  background: #fafafa;
+
+  color: #202124;
+
+  text-align: center;
+
+  font-size: 16px;
+  font-weight: 600;
+
+  outline: none;
+}
+
+#tsdInput:focus {
+  border-color: #1a73e8;
+  background: #fff;
+}
+
+#tsdInput:disabled {
+  background: #eee;
+  color: #888;
+}
+
+
+/* ===== КАМЕРА ===== */
+
+#reader-wrap {
+  display: none;
+
+  width: 100%;
+  max-width: 420px;
+
+  height: 220px;
+
+  margin: 0 auto;
+
+  border-radius: 12px;
+
+  overflow: hidden;
+
+  position: relative;
+
+  background: #000;
+
+  box-shadow: 0 1px 5px rgba(0,0,0,.15);
+}
+
+#reader {
+  width: 100%;
+  height: 220px;
+
+  border: none !important;
+}
+
+#reader video {
+  width: 100% !important;
+  height: 220px !important;
+
+  /*
+    ВАЖНО:
+    contain вместо cover.
+
+    cover сильно обрезал изображение
+    на некоторых телефонах и визуально
+    выглядел как сильный зум.
+  */
+  object-fit: contain !important;
+
+  background: #000;
+}
+
+
+/*
+  Убираем стандартные углы html5-qrcode.
+*/
+#reader #qr-shaded-region {
+  border: none !important;
+  box-shadow: none !important;
+}
+
+#reader #qr-shaded-region > div {
+  display: none !important;
+}
+
+
+/*
+  Красная линия.
+*/
+#reader-wrap::after {
+  content: "";
+
+  position: absolute;
+  z-index: 20;
+
+  top: 50%;
+  left: 5%;
+  right: 5%;
+
+  height: 2px;
+
+  transform: translateY(-50%);
+
+  background: #ff2020;
+
+  border-radius: 2px;
+
+  box-shadow:
+    0 0 4px rgba(255,32,32,.9),
+    0 0 8px rgba(255,32,32,.5);
+
+  pointer-events: none;
+}
+
+
+/* ===== СТАТУС ===== */
 
     /* ===== СТАТУС ===== */
 
@@ -481,22 +620,55 @@ body {
     <span id="netState">Онлайн</span>
   </div>
 
-  <div id="reader-wrap">
-    <div id="reader"></div>
-  </div>
+  <div class="scan-mode-switch">
+
+  <button
+    type="button"
+    id="btnModeTsd"
+    class="scan-mode-btn active"
+  >
+    ТСД
+  </button>
+
+  <button
+    type="button"
+    id="btnModeCamera"
+    class="scan-mode-btn"
+  >
+    Камера
+  </button>
+
+</div>
+
+
+<div id="tsd-wrap">
+
+  <span id="tsdHint">
+    Сканируйте коробку
+  </span>
+
+  <input
+    id="tsdInput"
+    type="text"
+    inputmode="none"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+  >
+
+</div>
+
+
+<div id="reader-wrap">
+  <div id="reader"></div>
+</div>
 
   <p class="status" id="status">Загрузка…</p>
 
   <div id="card"></div>
 
-  <button
-    id="btnStart"
-    class="btn-start"
-    style="display:none"
-  >
-    Начать запаковку
-  </button>
-
+ 
   <button
     id="btnClose"
     class="btn-close"
@@ -557,7 +729,7 @@ body {
     // LOCAL STORAGE
     // =========================================================
 
-    const DB_CACHE_KEY = 'scanner_db_cache_v2';
+    const DB_CACHE_KEY = 'scanner_db_cache_v3';
     const QUEUE_KEY    = 'scanner_action_queue_v1';
 
 
@@ -578,15 +750,38 @@ body {
 
     let db = loadCachedDb();
 
-    let currentCode = null;
+   let currentCode = null;
 
-    /*
-      scan    — обычное сканирование
-      confirm — ждём повторного сканирования коробки
-    */
-    let mode = 'scan';
+/*
+  box     — ждём коробку
+  product — ждём товар для коробки
+  pack    — товар проверен, коробку запаковывают
+  confirm — ждём повторный скан коробки для закрытия
+*/
+let mode = 'box';
 
-    let syncBusy = false;
+
+/*
+  По умолчанию всегда ТСД.
+
+  localStorage здесь специально НЕ используется:
+  выбор сохраняется только пока открыта эта страница.
+
+  После перезагрузки снова будет ТСД.
+*/
+let scanSource = 'tsd';
+
+
+let cameraRunning = false;
+let cameraStarting = false;
+
+let lastCameraCode = '';
+let lastCameraAt = 0;
+
+let lastBoxCameraCode = '';
+let lastBoxCameraAt = 0;
+
+let syncBusy = false;
 
 
     // =========================================================
@@ -918,6 +1113,9 @@ body {
 
         el('btnSupplies').style.display =
           'block';
+        updateScanSurface();
+
+focusTsd();
 
         /*
           После получения базы пробуем
@@ -950,248 +1148,1162 @@ body {
     // СКАНЕР
     // =========================================================
 
-    const scanner = new Html5Qrcode(
-      'reader',
-      {
-        experimentalFeatures: {
-          useBarCodeDetectorIfSupported: true
-        },
+   // =========================================================
+// СКАНЕР: ТСД + КАМЕРА
+// =========================================================
 
-        formatsToSupport: [
-          Html5QrcodeSupportedFormats.EAN_13,
-          Html5QrcodeSupportedFormats.EAN_8,
-          Html5QrcodeSupportedFormats.UPC_A,
-          Html5QrcodeSupportedFormats.UPC_E,
-          Html5QrcodeSupportedFormats.CODE_128,
-          Html5QrcodeSupportedFormats.CODE_39,
-          Html5QrcodeSupportedFormats.ITF
-        ]
-      }
+const tsdInput =
+  el('tsdInput');
+
+const tsdHint =
+  el('tsdHint');
+
+const btnModeTsd =
+  el('btnModeTsd');
+
+const btnModeCamera =
+  el('btnModeCamera');
+
+
+const scanner =
+  new Html5Qrcode(
+    'reader',
+    {
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true
+      },
+
+      formatsToSupport: [
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.UPC_A,
+        Html5QrcodeSupportedFormats.UPC_E,
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF
+      ]
+    }
+  );
+
+
+// =========================================================
+// ЗВУК
+// =========================================================
+
+let audioContext = null;
+
+
+function getAudioContext() {
+
+  if (!audioContext) {
+
+    const AudioContextClass =
+      window.AudioContext ||
+      window.webkitAudioContext;
+
+    if (!AudioContextClass) {
+      return null;
+    }
+
+    audioContext =
+      new AudioContextClass();
+  }
+
+
+  if (
+    audioContext.state ===
+    'suspended'
+  ) {
+
+    audioContext
+      .resume()
+      .catch(() => {});
+  }
+
+
+  return audioContext;
+}
+
+
+function beep(
+  frequency,
+  duration,
+  delay = 0,
+  volume = 0.12
+) {
+
+  const ctx =
+    getAudioContext();
+
+  if (!ctx) {
+    return;
+  }
+
+
+  const start =
+    ctx.currentTime +
+    delay / 1000;
+
+
+  const oscillator =
+    ctx.createOscillator();
+
+  const gain =
+    ctx.createGain();
+
+
+  oscillator.type =
+    'sine';
+
+  oscillator.frequency
+    .setValueAtTime(
+      frequency,
+      start
     );
 
 
-    function startScanner() {
-      return scanner.start(
-        {
-          facingMode: 'environment'
-        },
-        {
-  fps: 15,
+  gain.gain
+    .setValueAtTime(
+      0.0001,
+      start
+    );
 
-  qrbox: {
-    width: 300,
-    height: 110
-  },
+  gain.gain
+    .exponentialRampToValueAtTime(
+      volume,
+      start + 0.01
+    );
 
-  /*
-    Не заставляем телефон открывать камеру в 1920x1080.
-    На некоторых смартфонах это приводит к сильному
-    кропу / зуму или выбору неудачного объектива.
-  */
-  videoConstraints: {
-    facingMode: {
-      ideal: 'environment'
-    }
-  }
-},
-
-        onScan
-
-      ).then(() => {
-
-        /*
-          Если камера умеет аппаратный зум —
-          сбрасываем его на минимум.
-        */
-        try {
-          const caps =
-            scanner.getRunningTrackCapabilities();
-
-          if (
-            caps &&
-            caps.zoom &&
-            typeof caps.zoom.min !== 'undefined'
-          ) {
-            scanner
-              .applyVideoConstraints({
-                advanced: [
-                  {
-                    zoom: caps.zoom.min
-                  }
-                ]
-              })
-              .catch(() => {});
-          }
-        } catch (e) {}
+  gain.gain
+    .exponentialRampToValueAtTime(
+      0.0001,
+      start + duration / 1000
+    );
 
 
-        /*
-          Если карточка уже открыта —
-          камера стоит на паузе.
-        */
-        if (
-          currentCode &&
-          mode === 'scan'
-        ) {
-          try {
-            scanner.pause(false);
-          } catch (e) {}
-        }
+  oscillator.connect(gain);
 
-      }).catch(err => {
-
-        statusEl.textContent =
-          'Не удалось открыть камеру: ' +
-          err;
-      });
-    }
+  gain.connect(
+    ctx.destination
+  );
 
 
-    startScanner();
+  oscillator.start(start);
+
+  oscillator.stop(
+    start +
+    duration / 1000 +
+    0.02
+  );
+}
 
 
-    // =========================================================
-    // ВОЗВРАТ В ПРИЛОЖЕНИЕ
-    // =========================================================
+function playSuccess() {
 
-    let cameraRestarting = false;
+  beep(
+    1050,
+    70,
+    0,
+    0.12
+  );
 
-async function restartCameraAfterReturn() {
+  beep(
+    1500,
+    90,
+    90,
+    0.12
+  );
+}
 
-  /*
-    Если карточка коробки уже открыта и мы НЕ ждём
-    повторного скана для закрытия — камера не нужна.
-  */
+
+function playError() {
+
+  beep(
+    230,
+    150,
+    0,
+    0.16
+  );
+
+  beep(
+    180,
+    190,
+    180,
+    0.16
+  );
+}
+
+
+// =========================================================
+// ОБЩИЕ ФУНКЦИИ СКАНИРОВАНИЯ
+// =========================================================
+
+function normalizeScan(value) {
+
+  return String(
+    value ?? ''
+  )
+    .trim()
+    .replace(/\s+/g, '');
+}
+
+
+function scannerNeedsInput() {
+
   if (
-    currentCode &&
-    mode === 'scan'
+    mode === 'box' &&
+    !currentCode
   ) {
-    await scanner
-      .stop()
-      .catch(() => {});
+    return true;
+  }
 
+
+  if (
+    mode === 'product'
+  ) {
+    return true;
+  }
+
+
+  if (
+    mode === 'confirm'
+  ) {
+    return true;
+  }
+
+
+  return false;
+}
+
+
+function getScanPrompt() {
+
+  if (
+    mode === 'box' &&
+    !currentCode
+  ) {
+    return 'Сканируйте коробку';
+  }
+
+
+  if (
+    mode === 'product'
+  ) {
+    return 'Сканируйте товар';
+  }
+
+
+  if (
+    mode === 'confirm'
+  ) {
+    return 'Сканируйте коробку повторно';
+  }
+
+
+  if (
+    mode === 'pack'
+  ) {
+    return 'Запакуйте коробку';
+  }
+
+
+  return 'Сканирование не требуется';
+}
+
+
+function focusTsd() {
+
+  if (
+    scanSource !== 'tsd' ||
+    !scannerNeedsInput()
+  ) {
     return;
   }
 
 
-  if (cameraRestarting) {
-    return;
-  }
+  setTimeout(
+    () => {
+
+      try {
+        tsdInput.focus({
+          preventScroll: true
+        });
+      } catch (e) {
+        tsdInput.focus();
+      }
+
+    },
+    30
+  );
+}
 
 
-  cameraRestarting = true;
+function updateScanSurface() {
 
-  try {
+  const needsInput =
+    scannerNeedsInput();
 
-    await scanner
-      .stop()
-      .catch(() => {});
+
+  btnModeTsd.classList.toggle(
+    'active',
+    scanSource === 'tsd'
+  );
+
+  btnModeCamera.classList.toggle(
+    'active',
+    scanSource === 'camera'
+  );
+
+
+  tsdHint.textContent =
+    getScanPrompt();
+
+
+  if (
+    scanSource === 'tsd'
+  ) {
+
+    el('tsd-wrap').style.display =
+      'block';
+
+    el('reader-wrap').style.display =
+      'none';
+
+
+    tsdInput.disabled =
+      !needsInput;
+
+
+    if (needsInput) {
+      focusTsd();
+    }
+
+  } else {
+
+    el('tsd-wrap').style.display =
+      'none';
 
 
     /*
-      Даём браузеру освободить старый поток камеры.
+      Во время упаковки камера вообще
+      не показывается.
     */
-    await new Promise(resolve =>
-      setTimeout(resolve, 300)
-    );
-
-
-    await startScanner();
-
-  } finally {
-
-    cameraRestarting = false;
+    el('reader-wrap').style.display =
+      needsInput
+        ? 'block'
+        : 'none';
   }
 }
 
 
-document.addEventListener(
-  'visibilitychange',
-  () => {
+// =========================================================
+// КАМЕРА
+// =========================================================
 
-    if (
-      document.visibilityState ===
-      'visible'
-    ) {
-      restartCameraAfterReturn();
-    }
+async function startCamera() {
+
+  if (
+    scanSource !== 'camera' ||
+    !scannerNeedsInput()
+  ) {
+    return;
   }
-);
-  
-    // =========================================================
-    // РЕЗУЛЬТАТ СКАНИРОВАНИЯ
-    // =========================================================
-
-    function onScan(text) {
-
-      if (!db) {
-        statusEl.textContent =
-          'Данные ещё не загружены';
-
-        return;
-      }
-
-      const code =
-        String(text).trim();
 
 
-      /*
-        Повторное сканирование
-        при закрытии коробки.
-      */
-      if (mode === 'confirm') {
+  if (
+    cameraRunning ||
+    cameraStarting
+  ) {
+    return;
+  }
 
-        if (code === currentCode) {
+
+  cameraStarting = true;
+
 
   /*
-    Подтверждающий штрихкод считан —
-    камера снова больше не нужна.
+    Элемент должен быть виден до scanner.start().
   */
-  scanner
-    .stop()
-    .catch(() => {})
-    .then(() => {
-      doAction(
-        'close',
-        ST_DONE
-      );
-    });
+  el('reader-wrap').style.display =
+    'block';
 
-        } else {
 
-          statusEl.innerHTML =
-            '<span class="warn">' +
-            'Штрих-коды не совпадают!' +
-            '</span> Отсканируйте коробку «' +
-            escapeHtml(currentCode) +
-            '»';
+  const availableWidth =
+    Math.max(
+      240,
+      Math.min(
+        380,
+        window.innerWidth - 36
+      )
+    );
+
+
+  const qrWidth =
+    Math.floor(
+      availableWidth * 0.92
+    );
+
+
+  try {
+
+    await scanner.start(
+
+      {
+        facingMode: {
+          ideal: 'environment'
         }
+      },
 
-        return;
+      {
+        /*
+          Чуть выше стандартного FPS.
+          Для одномерных штрихкодов это
+          заметно улучшает вероятность
+          удачного кадра.
+        */
+        fps: 20,
+
+        /*
+          Для длинных 1D-кодов нужна
+          широкая и невысокая зона.
+        */
+        qrbox: {
+          width: qrWidth,
+          height: 105
+        },
+
+        /*
+          Заднюю камеру не нужно зеркалить.
+        */
+        disableFlip: true
+      },
+
+      onCameraScan
+    );
+
+
+    cameraRunning = true;
+
+
+    /*
+      Пытаемся настроить аппаратную камеру.
+
+      На разных телефонах набор возможностей
+      отличается, поэтому всё завернуто
+      в проверки.
+    */
+    try {
+
+      const caps =
+        scanner
+          .getRunningTrackCapabilities();
+
+
+      const advanced = [];
+
+
+      /*
+        Сбрасываем аппаратный zoom
+        на минимально доступный.
+      */
+      if (
+        caps &&
+        caps.zoom &&
+        typeof caps.zoom.min === 'number'
+      ) {
+
+        advanced.push({
+          zoom: caps.zoom.min
+        });
       }
 
 
       /*
-        Обычное сканирование.
+        Continuous autofocus сильно помогает
+        при сканировании штрихкодов с близкого
+        расстояния.
       */
-      /*
-  Коробка считана — камера больше не нужна.
-  Полностью выключаем её, чтобы не расходовать батарею.
-*/
-scanner
-  .stop()
-  .catch(() => {})
-  .then(() => {
-    currentCode = code;
-    render();
-  });
+      if (
+        caps &&
+        Array.isArray(
+          caps.focusMode
+        ) &&
+        caps.focusMode.includes(
+          'continuous'
+        )
+      ) {
+
+        advanced.push({
+          focusMode: 'continuous'
+        });
+      }
+
+
+      if (
+        advanced.length
+      ) {
+
+        scanner
+          .applyVideoConstraints({
+            advanced: advanced
+          })
+          .catch(() => {});
+      }
+
+    } catch (e) {}
+
+
+  } catch (err) {
+
+    cameraRunning = false;
+
+    statusEl.innerHTML =
+      '<span class="warn">' +
+      'Не удалось открыть камеру' +
+      '</span>';
+
+  } finally {
+
+    cameraStarting = false;
+  }
+}
+
+
+async function stopCamera() {
+
+  if (
+    !cameraRunning &&
+    !cameraStarting
+  ) {
+    return;
+  }
+
+
+  try {
+
+    await scanner.stop();
+
+  } catch (e) {}
+
+
+  cameraRunning = false;
+}
+
+
+// =========================================================
+// ПЕРЕКЛЮЧЕНИЕ ТСД / КАМЕРА
+// =========================================================
+
+async function setScanSource(source) {
+
+  if (
+    source !== 'tsd' &&
+    source !== 'camera'
+  ) {
+    return;
+  }
+
+
+  scanSource = source;
+
+
+  updateScanSurface();
+
+
+  if (
+    source === 'tsd'
+  ) {
+
+    await stopCamera();
+
+    updateScanSurface();
+
+    focusTsd();
+
+    return;
+  }
+
+
+  /*
+    Нажатие на кнопку одновременно
+    разрешает WebAudio на мобильном.
+  */
+  getAudioContext();
+
+
+  if (
+    scannerNeedsInput()
+  ) {
+    await startCamera();
+  }
+}
+
+
+btnModeTsd.onclick =
+  () => {
+
+    getAudioContext();
+
+    setScanSource(
+      'tsd'
+    );
+  };
+
+
+btnModeCamera.onclick =
+  () => {
+
+    getAudioContext();
+
+    setScanSource(
+      'camera'
+    );
+  };
+
+
+// =========================================================
+// ТСД
+// =========================================================
+
+tsdInput.addEventListener(
+  'keydown',
+  event => {
+
+    /*
+      Большинство ТСД после кода отправляют Enter.
+      Некоторые настроены на Tab — поддерживаем оба.
+    */
+    if (
+      event.key !== 'Enter' &&
+      event.key !== 'Tab'
+    ) {
+      return;
     }
 
 
-    // =========================================================
-    // СТАТИСТИКА ПОСТАВКИ
-    // =========================================================
+    event.preventDefault();
 
+
+    /*
+      KeyDown считается действием пользователя,
+      поэтому здесь можно разблокировать звук.
+    */
+    getAudioContext();
+
+
+    const value =
+      tsdInput.value;
+
+
+    tsdInput.value = '';
+
+
+    processScannedCode(
+      value,
+      'tsd'
+    );
+
+
+    focusTsd();
+  }
+);
+
+
+// =========================================================
+// РЕЗУЛЬТАТ КАМЕРЫ
+// =========================================================
+
+function onCameraScan(text) {
+
+  const code =
+    normalizeScan(text);
+
+
+  if (!code) {
+    return;
+  }
+
+
+  const now =
+    Date.now();
+
+
+  /*
+    html5-qrcode может вернуть один и тот же
+    штрихкод несколько раз подряд.
+
+    Не считаем это несколькими сканами.
+  */
+  if (
+    code === lastCameraCode &&
+    now - lastCameraAt < 700
+  ) {
+    return;
+  }
+
+
+  lastCameraCode =
+    code;
+
+  lastCameraAt =
+    now;
+
+
+  processScannedCode(
+    code,
+    'camera'
+  );
+}
+
+
+// =========================================================
+// ЕДИНАЯ ЛОГИКА СКАНИРОВАНИЯ
+//
+// Здесь одинаково обрабатываются:
+// - ТСД
+// - камера
+// =========================================================
+
+function processScannedCode(
+  rawCode,
+  source
+) {
+
+  const code =
+    normalizeScan(rawCode);
+
+
+  if (!code) {
+    return;
+  }
+
+
+  if (!db) {
+
+    playError();
+
+    statusEl.innerHTML =
+      '<span class="warn">' +
+      'Данные ещё не загружены' +
+      '</span>';
+
+    return;
+  }
+
+
+  // =====================================================
+  // ЭТАП 1: КОРОБКА
+  // =====================================================
+
+  if (
+    mode === 'box'
+  ) {
+
+    const box =
+      db[code];
+
+
+    /*
+      Коробки нет в таблице.
+    */
+    if (!box) {
+
+      currentCode =
+        code;
+
+      playError();
+
+      render();
+
+      statusEl.innerHTML =
+        '<span class="warn">' +
+        'Коробка «' +
+        escapeHtml(code) +
+        '» не найдена' +
+        '</span>';
+
+
+      if (
+        source === 'camera'
+      ) {
+        stopCamera();
+      }
+
+      return;
+    }
+
+
+    currentCode =
+      code;
+
+
+    /*
+      Уже закрытая коробка.
+    */
+    if (
+      box.status === ST_DONE
+    ) {
+
+      playError();
+
+      render();
+
+      statusEl.innerHTML =
+        '<span class="warn">' +
+        'Коробка уже закрыта' +
+        '</span>';
+
+
+      if (
+        source === 'camera'
+      ) {
+        stopCamera();
+      }
+
+      return;
+    }
+
+
+    /*
+      Если коробка уже "В процессе",
+      считаем, что товар для неё
+      ранее уже был проверен.
+
+      Сразу возвращаемся к упаковке.
+    */
+    if (
+      box.status === ST_WORK
+    ) {
+
+      playSuccess();
+
+      mode =
+        'pack';
+
+      render();
+
+
+      if (
+        source === 'camera'
+      ) {
+        stopCamera();
+      }
+
+      return;
+    }
+
+
+    /*
+      Новая коробка:
+      переходим к сканированию товара.
+    */
+    playSuccess();
+
+
+    mode =
+      'product';
+
+
+    /*
+      Для камеры запоминаем недавно
+      считанную коробку.
+
+      Если она ещё секунду остаётся
+      перед камерой, не будем ошибочно
+      считать её "неправильным товаром".
+    */
+    if (
+      source === 'camera'
+    ) {
+
+      lastBoxCameraCode =
+        code;
+
+      lastBoxCameraAt =
+        Date.now();
+    }
+
+
+    render();
+
+    return;
+  }
+
+
+  // =====================================================
+  // ЭТАП 2: ТОВАР
+  // =====================================================
+
+  if (
+    mode === 'product'
+  ) {
+
+    const box =
+      db[currentCode];
+
+
+    if (!box) {
+
+      playError();
+
+      statusEl.innerHTML =
+        '<span class="warn">' +
+        'Ошибка: коробка не найдена' +
+        '</span>';
+
+      return;
+    }
+
+
+    const expectedBarcode =
+      normalizeScan(
+        box.productBarcode
+      );
+
+
+    /*
+      После скана коробки камера может
+      ещё видеть эту же этикетку.
+
+      Первые 2 секунды просто игнорируем
+      повторный код коробки.
+    */
+    if (
+      source === 'camera' &&
+      code === lastBoxCameraCode &&
+      code !== expectedBarcode &&
+      Date.now() -
+        lastBoxCameraAt <
+        2000
+    ) {
+      return;
+    }
+
+
+    /*
+      В таблице не указан штрихкод товара.
+    */
+    if (!expectedBarcode) {
+
+      playError();
+
+      statusEl.innerHTML =
+        '<span class="warn">' +
+        'У этой коробки не указан штрихкод товара в колонке F' +
+        '</span>';
+
+      return;
+    }
+
+
+    /*
+      НЕПРАВИЛЬНЫЙ ТОВАР.
+    */
+    if (
+      code !== expectedBarcode
+    ) {
+
+      playError();
+
+      statusEl.innerHTML =
+        '<span class="warn">' +
+        'НЕПРАВИЛЬНЫЙ ТОВАР' +
+        '</span>' +
+
+        '<br>' +
+
+        'Отсканирован: ' +
+        escapeHtml(code);
+
+
+      /*
+        Камеру не выключаем:
+        можно сразу показать правильный товар.
+      */
+
+      focusTsd();
+
+      return;
+    }
+
+
+    /*
+      ПРАВИЛЬНЫЙ ТОВАР.
+    */
+    playSuccess();
+
+
+    /*
+      Сразу, без ожидания сервера,
+      ставим "В процессе".
+    */
+    setStatusSilent(
+      'start',
+      ST_WORK
+    );
+
+
+    /*
+      Кнопка "Начать запаковку"
+      больше не нужна.
+
+      Мы автоматически перешли
+      к упаковке.
+    */
+    mode =
+      'pack';
+
+
+    render();
+
+
+    /*
+      Пока пользователь физически
+      запаковывает коробку,
+      камера не нужна.
+    */
+    if (
+      source === 'camera'
+    ) {
+      stopCamera();
+    }
+
+
+    return;
+  }
+
+
+  // =====================================================
+  // ЭТАП 3: ПОВТОРНАЯ КОРОБКА
+  // =====================================================
+
+  if (
+    mode === 'confirm'
+  ) {
+
+    /*
+      Сканируется другая коробка.
+    */
+    if (
+      code !==
+      normalizeScan(currentCode)
+    ) {
+
+      playError();
+
+      statusEl.innerHTML =
+        '<span class="warn">' +
+        'ШТРИХКОДЫ НЕ СОВПАДАЮТ' +
+        '</span>' +
+
+        '<br>' +
+
+        'Нужна коробка «' +
+        escapeHtml(currentCode) +
+        '»';
+
+      return;
+    }
+
+
+    /*
+      Всё правильно.
+    */
+    playSuccess();
+
+
+    setStatusSilent(
+      'close',
+      ST_DONE
+    );
+
+
+    mode =
+      'box';
+
+
+    render();
+
+
+    if (
+      source === 'camera'
+    ) {
+      stopCamera();
+    }
+
+
+    return;
+  }
+}
+
+
+// =========================================================
+// СВОРАЧИВАНИЕ / ВОЗВРАТ
+// =========================================================
+
+document.addEventListener(
+  'visibilitychange',
+  async () => {
+
+    /*
+      При сворачивании камера всегда
+      полностью выключается.
+    */
+    if (
+      document.visibilityState !==
+      'visible'
+    ) {
+
+      await stopCamera();
+
+      return;
+    }
+
+
+    /*
+      При возвращении камера запускается
+      только если пользователь сам выбрал
+      режим "Камера" и сейчас действительно
+      нужен скан.
+    */
+    if (
+      scanSource === 'camera' &&
+      scannerNeedsInput()
+    ) {
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            250
+          )
+      );
+
+      await startCamera();
+
+      return;
+    }
+
+
+    focusTsd();
+  }
+);
+
+
+// =========================================================
+// ПЕРВОНАЧАЛЬНЫЙ РЕЖИМ
+// =========================================================
+
+updateScanSurface();
+
+focusTsd();
+
+
+// =========================================================
+// СТАТИСТИКА ПОСТАВКИ
+// =========================================================
+
+  
     function supplyStats(supply) {
 
       let total = 0;
@@ -1267,149 +2379,272 @@ scanner
 
     function render() {
 
-      hideButtons();
-
-      const box = db[currentCode];
-
-      cardEl.style.display = 'block';
+  hideButtons();
 
 
-      if (!box) {
-
-        statusEl.textContent = '';
-
-        cardEl.innerHTML =
-          '<span class="warn">' +
-          'Код «' +
-          escapeHtml(currentCode) +
-          '» не найден в таблице' +
-          '</span>';
-
-        el('btnAgain').style.display =
-          'block';
-
-        el('btnSupplies').style.display =
-          'block';
-
-        return;
-      }
+  const box =
+    db &&
+    currentCode
+      ? db[currentCode]
+      : null;
 
 
-      const badgeClass =
-        box.status === ST_DONE
-          ? 'st-done'
-          : box.status === ST_WORK
-            ? 'st-work'
-            : 'st-new';
+  cardEl.style.display =
+    currentCode
+      ? 'block'
+      : 'none';
 
 
-      const stats =
-        supplyStats(box.supply);
+  /*
+    Неизвестная коробка.
+  */
+  if (
+    currentCode &&
+    !box
+  ) {
+
+    cardEl.innerHTML =
+      '<span class="warn">' +
+      'Код «' +
+      escapeHtml(currentCode) +
+      '» не найден в таблице' +
+      '</span>';
 
 
-      const counterClass =
-        getCounterClass(stats);
+    el('btnAgain').style.display =
+      'block';
+
+    el('btnSupplies').style.display =
+      'block';
 
 
-      let html =
-  '<div class="badge-row">' +
+    updateScanSurface();
 
-    '<span class="badge ' +
-    badgeClass +
-    '">' +
-    escapeHtml(box.status) +
-    '</span>' +
-
-    '<span class="counter ' +
-    counterClass +
-    '" onclick="toggleSupply()">' +
-
-    'Закрыто ' +
-    stats.counted +
-    '/' +
-    stats.total +
-
-    '</span>' +
-
-  '</div>' +
-
-  '<table>' +
-
-    /*
-      Номер отсканированной этикетки всегда
-      показываем первой строкой.
-    */
-    '<tr>' +
-      '<td>Коробка</td>' +
-      '<td><b>' +
-        escapeHtml(currentCode) +
-      '</b></td>' +
-    '</tr>';
+    return;
+  }
 
 
-for (const k in box.info) {
+  if (!box) {
+
+    updateScanSurface();
+
+    return;
+  }
+
+
+  const badgeClass =
+    box.status === ST_DONE
+      ? 'st-done'
+      : box.status === ST_WORK
+        ? 'st-work'
+        : 'st-new';
+
+
+  const stats =
+    supplyStats(
+      box.supply
+    );
+
+
+  const counterClass =
+    getCounterClass(
+      stats
+    );
+
+
+  let html =
+
+    '<div class="badge-row">' +
+
+      '<span class="badge ' +
+      badgeClass +
+      '">' +
+
+        escapeHtml(
+          box.status
+        ) +
+
+      '</span>' +
+
+      '<span class="counter ' +
+      counterClass +
+      '" onclick="toggleSupply()">' +
+
+        'Закрыто ' +
+        stats.counted +
+        '/' +
+        stats.total +
+
+      '</span>' +
+
+    '</div>' +
+
+
+    '<table>' +
+
+
+      /*
+        Номер коробки первым,
+        над кластером.
+      */
+      '<tr>' +
+
+        '<td>Коробка</td>' +
+
+        '<td><b>' +
+          escapeHtml(
+            currentCode
+          ) +
+        '</b></td>' +
+
+      '</tr>';
+
+
+  for (
+    const k in box.info
+  ) {
+
+    html +=
+
+      '<tr>' +
+
+        '<td>' +
+          escapeHtml(k) +
+        '</td>' +
+
+        '<td>' +
+          escapeHtml(
+            box.info[k]
+          ) +
+        '</td>' +
+
+      '</tr>';
+  }
+
 
   html +=
-    '<tr>' +
+    '</table>' +
 
-      '<td>' +
-      escapeHtml(k) +
-      '</td>' +
+    '<div ' +
+      'id="supplyList" ' +
+      'style="display:none">' +
+    '</div>';
 
-      '<td>' +
-      escapeHtml(box.info[k]) +
-      '</td>' +
 
-    '</tr>';
+  cardEl.innerHTML =
+    html;
+
+
+  // =====================================================
+  // ЗАКРЫТА
+  // =====================================================
+
+  if (
+    box.status === ST_DONE
+  ) {
+
+    statusEl.textContent =
+      'Коробка уже закрыта';
+
+
+    el('btnAgain').style.display =
+      'block';
+
+    el('btnSupplies').style.display =
+      'block';
+
+
+    updateScanSurface();
+
+    return;
+  }
+
+
+  // =====================================================
+  // ЖДЁМ ТОВАР
+  // =====================================================
+
+  if (
+    mode === 'product'
+  ) {
+
+    statusEl.innerHTML =
+      '<span class="hint">' +
+      'Коробка найдена. Теперь отсканируйте товар' +
+      '</span>';
+
+
+    el('btnAgain').style.display =
+      'block';
+
+    el('btnSupplies').style.display =
+      'block';
+
+
+    updateScanSurface();
+
+    return;
+  }
+
+
+  // =====================================================
+  // УПАКОВКА
+  // =====================================================
+
+  if (
+    mode === 'pack'
+  ) {
+
+    statusEl.innerHTML =
+      '<span class="hint">' +
+      'Товар верный. Запакуйте коробку и наклейте стикер' +
+      '</span>';
+
+
+    el('btnClose').style.display =
+      'block';
+
+    el('btnAgain').style.display =
+      'block';
+
+    el('btnSupplies').style.display =
+      'block';
+
+
+    updateScanSurface();
+
+    return;
+  }
+
+
+  // =====================================================
+  // ПОДТВЕРЖДЕНИЕ ЗАКРЫТИЯ
+  // =====================================================
+
+  if (
+    mode === 'confirm'
+  ) {
+
+    statusEl.innerHTML =
+      '<span class="hint">' +
+      'Отсканируйте коробку «' +
+      escapeHtml(currentCode) +
+      '» ещё раз' +
+      '</span>';
+
+
+    el('btnCancel').style.display =
+      'block';
+
+
+    updateScanSurface();
+
+    return;
+  }
+
+
+  updateScanSurface();
 }
-
-
-      html +=
-        '</table>' +
-
-        '<div ' +
-        'id="supplyList" ' +
-        'style="display:none">' +
-        '</div>';
-
-
-      cardEl.innerHTML = html;
-
-      statusEl.textContent = '';
-
-
-      if (box.status === ST_NEW) {
-
-        el('btnStart').style.display =
-          'block';
-
-
-      } else if (
-        box.status === ST_WORK
-      ) {
-
-        statusEl.innerHTML =
-          '<span class="hint">' +
-          'Положите товары в коробку, запакуйте и наклейте стикер' +
-          '</span>';
-
-        el('btnClose').style.display =
-          'block';
-
-
-      } else {
-
-        statusEl.textContent =
-          'Коробка уже закрыта';
-      }
-
-
-      el('btnAgain').style.display =
-        'block';
-
-      el('btnSupplies').style.display =
-        'block';
-    }
 
 
     // =========================================================
@@ -1418,21 +2653,21 @@ for (const k in box.info) {
 
     function hideButtons() {
 
-      [
-        'btnStart',
-        'btnClose',
-        'btnCancel',
-        'btnAgain',
-        'btnSupplies'
-      ].forEach(id => {
+  [
+    'btnClose',
+    'btnCancel',
+    'btnAgain',
+    'btnSupplies'
+  ].forEach(id => {
 
-        el(id).style.display =
-          'none';
-      });
+    el(id).style.display =
+      'none';
+  });
 
-      el('allSupplies').style.display =
-        'none';
-    }
+
+  el('allSupplies').style.display =
+    'none';
+}
 
 
     // =========================================================
@@ -1739,155 +2974,159 @@ document.addEventListener(
     //
     // =========================================================
 
-    function doAction(
-      action,
-      newStatus
-    ) {
-
-      const code =
-        currentCode;
-
-
-      if (
-        !db ||
-        !db[code]
-      ) {
-        return;
-      }
-
-
-      /*
-        Мгновенно меняем статус
-        в локальной базе.
-      */
-      db[code].status =
-        newStatus;
-
-
-      /*
-        Сохраняем его для офлайн-режима.
-      */
-      saveDbCache();
-
-
-      /*
-        Добавляем серверное действие
-        в очередь.
-      */
-      addToQueue(
-        action,
-        code,
-        newStatus
-      );
-
-
-      /*
-        Пользователь сразу видит
-        следующий этап.
-      */
-      mode = 'scan';
-
-      render();
-
-
-      /*
-        Серверная запись идёт в фоне.
-        Интерфейс её НЕ ждёт.
-      */
-      processQueue();
-    }
-
-
     // =========================================================
-    // НАЧАТЬ ЗАПАКОВКУ
-    // =========================================================
+// ТИХАЯ СМЕНА СТАТУСА
+// =========================================================
 
-    el('btnStart').onclick = () => {
+function setStatusSilent(
+  action,
+  newStatus
+) {
 
-      doAction(
-        'start',
-        ST_WORK
-      );
-    };
-
-
-    // =========================================================
-    // ЗАКРЫТЬ КОРОБКУ
-    // =========================================================
-
-    el('btnClose').onclick = async () => {
-
-  mode = 'confirm';
-
-  hideButtons();
-
-  el('btnCancel').style.display =
-    'block';
+  const code =
+    currentCode;
 
 
-  statusEl.innerHTML =
-    '<span class="hint">' +
-    'Для закрытия отсканируйте штрих-код коробки «' +
-    escapeHtml(currentCode) +
-    '» ещё раз' +
-    '</span>';
+  if (
+    !db ||
+    !db[code]
+  ) {
+    return;
+  }
 
 
   /*
-    Камера после первого сканирования была полностью
-    выключена. Для подтверждения запускаем её заново.
+    Интерфейс меняется мгновенно.
   */
-  await startScanner();
-};
+  db[code].status =
+    newStatus;
 
 
-    // =========================================================
-    // ОТМЕНА ЗАКРЫТИЯ
-    // =========================================================
-
-    el('btnCancel').onclick = async () => {
-
-  mode = 'scan';
-
-  await scanner
-    .stop()
-    .catch(() => {});
-
-  render();
-};
+  saveDbCache();
 
 
-    // =========================================================
-    // ДРУГАЯ КОРОБКА
-    // =========================================================
-
-    el('btnAgain').onclick = () => {
-
-      mode = 'scan';
-
-      currentCode = null;
-
-      cardEl.style.display =
-        'none';
-
-      hideButtons();
+  /*
+    Серверная запись попадает
+    в локальную очередь.
+  */
+  addToQueue(
+    action,
+    code,
+    newStatus
+  );
 
 
-      statusEl.textContent =
-        navigator.onLine
-          ? 'Отсканируйте штрих-код коробки'
-          : 'Офлайн-режим. Отсканируйте штрих-код коробки';
+  /*
+    Отправляем в фоне.
+    Пользователь этого не ждёт.
+  */
+  processQueue();
+}
 
 
-      el('btnSupplies').style.display =
-        'block';
+// =========================================================
+// ЗАКРЫТЬ КОРОБКУ
+// =========================================================
+
+el('btnClose').onclick =
+  async () => {
+
+    mode =
+      'confirm';
 
 
-      /*
-  Для следующей коробки снова включаем камеру.
-*/
-startScanner();
-    };
+    /*
+      Разрешаем звук после
+      пользовательского нажатия.
+    */
+    getAudioContext();
+
+
+    render();
+
+
+    if (
+      scanSource === 'camera'
+    ) {
+
+      await startCamera();
+
+    } else {
+
+      focusTsd();
+    }
+  };
+
+
+// =========================================================
+// ОТМЕНА ПОВТОРНОГО СКАНА
+// =========================================================
+
+el('btnCancel').onclick =
+  async () => {
+
+    mode =
+      'pack';
+
+
+    await stopCamera();
+
+
+    render();
+  };
+
+
+// =========================================================
+// СКАНИРОВАТЬ ДРУГУЮ КОРОБКУ
+// =========================================================
+
+el('btnAgain').onclick =
+  async () => {
+
+    await stopCamera();
+
+
+    mode =
+      'box';
+
+    currentCode =
+      null;
+
+
+    cardEl.style.display =
+      'none';
+
+
+    hideButtons();
+
+
+    statusEl.textContent =
+      'Отсканируйте штрих-код коробки';
+
+
+    el('btnSupplies').style.display =
+      'block';
+
+
+    updateScanSurface();
+
+
+    if (
+      scanSource === 'camera'
+    ) {
+
+      await startCamera();
+
+    } else {
+
+      focusTsd();
+    }
+  };
+
+
+// =========================================================
+// ВСЕ ПОСТАВКИ
+// =========================================================
 
 
     // =========================================================
