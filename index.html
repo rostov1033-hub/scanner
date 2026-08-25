@@ -177,6 +177,7 @@
 }
 
 
+
 /* ===== КАМЕРА ===== */
 
 #reader-wrap {
@@ -184,15 +185,12 @@
 
   width: 100%;
   max-width: 420px;
-
-  height: 220px;
+  height: 150px;
 
   margin: 0 auto;
 
-  border-radius: 12px;
-
+  border-radius: 10px;
   overflow: hidden;
-
   position: relative;
 
   background: #000;
@@ -202,22 +200,19 @@
 
 #reader {
   width: 100%;
-  height: 220px;
+  height: 150px;
 
   border: none !important;
 }
 
 #reader video {
   width: 100% !important;
-  height: 220px !important;
+  height: 150px !important;
 
   /*
-    ВАЖНО:
-    contain вместо cover.
-
-    cover сильно обрезал изображение
-    на некоторых телефонах и визуально
-    выглядел как сильный зум.
+    contain не обрезает изображение камеры,
+    поэтому на телефонах не создаётся
+    дополнительный визуальный зум.
   */
   object-fit: contain !important;
 
@@ -226,7 +221,7 @@
 
 
 /*
-  Убираем стандартные углы html5-qrcode.
+  Убираем стандартную рамку html5-qrcode.
 */
 #reader #qr-shaded-region {
   border: none !important;
@@ -239,7 +234,7 @@
 
 
 /*
-  Красная линия.
+  Красная линия сканирования.
 */
 #reader-wrap::after {
   content: "";
@@ -269,7 +264,7 @@
 
 /* ===== СТАТУС ===== */
 
-    /* ===== СТАТУС ===== */
+   
 
     .status {
       max-width: 420px;
@@ -1174,14 +1169,12 @@ const scanner =
       },
 
       formatsToSupport: [
-        Html5QrcodeSupportedFormats.EAN_13,
-        Html5QrcodeSupportedFormats.EAN_8,
-        Html5QrcodeSupportedFormats.UPC_A,
-        Html5QrcodeSupportedFormats.UPC_E,
-        Html5QrcodeSupportedFormats.CODE_128,
-        Html5QrcodeSupportedFormats.CODE_39,
-        Html5QrcodeSupportedFormats.ITF
-      ]
+  Html5QrcodeSupportedFormats.CODE_128,
+  Html5QrcodeSupportedFormats.EAN_13,
+  Html5QrcodeSupportedFormats.EAN_8,
+  Html5QrcodeSupportedFormats.CODE_39,
+  Html5QrcodeSupportedFormats.ITF
+]
     }
   );
 
@@ -1520,63 +1513,62 @@ async function startCamera() {
 
   cameraStarting = true;
 
-
-  /*
-    Элемент должен быть виден до scanner.start().
-  */
   el('reader-wrap').style.display =
     'block';
 
 
-  const availableWidth =
-    Math.max(
-      240,
-      Math.min(
-        380,
-        window.innerWidth - 36
+  /*
+    Ширина зоны рассчитывается так,
+    чтобы qrbox гарантированно помещался
+    даже на узких телефонах.
+  */
+  const qrWidth =
+    Math.min(
+      340,
+      Math.max(
+        220,
+        window.innerWidth - 60
       )
     );
 
 
-  const qrWidth =
-    Math.floor(
-      availableWidth * 0.92
-    );
+  const scannerConfig = {
+
+    /*
+      20 кадров достаточно быстро,
+      но не создаёт чрезмерную нагрузку.
+    */
+    fps: 20,
+
+    /*
+      Для длинных одномерных штрихкодов
+      нужна широкая и низкая область.
+    */
+    qrbox: {
+      width: qrWidth,
+      height: 90
+    },
+
+    disableFlip: true
+  };
 
 
   try {
 
+    /*
+      Сначала используем самый совместимый
+      способ выбора задней камеры.
+
+      Именно такой вариант у тебя работал
+      в старой версии.
+    */
     await scanner.start(
 
       {
-        facingMode: {
-          ideal: 'environment'
-        }
+        facingMode: 'environment'
       },
 
-      {
-        /*
-          Чуть выше стандартного FPS.
-          Для одномерных штрихкодов это
-          заметно улучшает вероятность
-          удачного кадра.
-        */
-        fps: 20,
-
-        /*
-          Для длинных 1D-кодов нужна
-          широкая и невысокая зона.
-        */
-        qrbox: {
-          width: qrWidth,
-          height: 105
-        },
-
-        /*
-          Заднюю камеру не нужно зеркалить.
-        */
-        disableFlip: true
-      },
+      scannerConfig,
 
       onCameraScan
     );
@@ -1585,13 +1577,109 @@ async function startCamera() {
     cameraRunning = true;
 
 
-    /*
-      Пытаемся настроить аппаратную камеру.
+  } catch (firstError) {
 
-      На разных телефонах набор возможностей
-      отличается, поэтому всё завернуто
-      в проверки.
+    /*
+      На некоторых телефонах facingMode
+      работает плохо.
+
+      Тогда получаем реальный список камер
+      и явно выбираем заднюю.
     */
+    try {
+
+      await scanner
+        .stop()
+        .catch(() => {});
+
+
+      const cameras =
+        await Html5Qrcode.getCameras();
+
+
+      if (
+        !cameras ||
+        !cameras.length
+      ) {
+        throw firstError;
+      }
+
+
+      /*
+        Пытаемся найти камеру по названию.
+      */
+      let selectedCamera =
+        cameras.find(camera =>
+          /back|rear|environment|зад/i.test(
+            camera.label || ''
+          )
+        );
+
+
+      /*
+        На телефонах задняя камера обычно
+        последняя в списке.
+
+        Это запасной вариант.
+      */
+      if (!selectedCamera) {
+        selectedCamera =
+          cameras[
+            cameras.length - 1
+          ];
+      }
+
+
+      await scanner.start(
+
+        selectedCamera.id,
+
+        scannerConfig,
+
+        onCameraScan
+      );
+
+
+      cameraRunning = true;
+
+
+    } catch (secondError) {
+
+      cameraRunning = false;
+
+
+      console.error(
+        'Ошибка запуска камеры:',
+        firstError,
+        secondError
+      );
+
+
+      statusEl.innerHTML =
+        '<span class="warn">' +
+        'Не удалось открыть камеру' +
+        '</span>' +
+
+        '<br>' +
+
+        '<small>' +
+        'Проверьте разрешение на использование камеры' +
+        '</small>';
+    }
+  }
+
+
+  /*
+    Если камера успешно открылась —
+    отдельно настраиваем её возможности.
+
+    Эти настройки НЕ участвуют в самом
+    открытии камеры, поэтому телефон,
+    который их не поддерживает,
+    всё равно сможет сканировать.
+  */
+  if (cameraRunning) {
+
     try {
 
       const caps =
@@ -1599,12 +1687,8 @@ async function startCamera() {
           .getRunningTrackCapabilities();
 
 
-      const advanced = [];
-
-
       /*
-        Сбрасываем аппаратный zoom
-        на минимально доступный.
+        Убираем аппаратный зум.
       */
       if (
         caps &&
@@ -1612,16 +1696,24 @@ async function startCamera() {
         typeof caps.zoom.min === 'number'
       ) {
 
-        advanced.push({
-          zoom: caps.zoom.min
-        });
+        scanner
+          .applyVideoConstraints({
+            advanced: [
+              {
+                zoom: caps.zoom.min
+              }
+            ]
+          })
+          .catch(() => {});
       }
 
 
       /*
-        Continuous autofocus сильно помогает
-        при сканировании штрихкодов с близкого
-        расстояния.
+        Continuous autofocus применяем
+        ОТДЕЛЬНО от zoom.
+
+        Так ошибка одной настройки
+        не ломает вторую.
       */
       if (
         caps &&
@@ -1633,49 +1725,47 @@ async function startCamera() {
         )
       ) {
 
-        advanced.push({
-          focusMode: 'continuous'
-        });
-      }
-
-
-      if (
-        advanced.length
-      ) {
-
         scanner
           .applyVideoConstraints({
-            advanced: advanced
+            advanced: [
+              {
+                focusMode: 'continuous'
+              }
+            ]
           })
           .catch(() => {});
       }
 
     } catch (e) {}
-
-
-  } catch (err) {
-
-    cameraRunning = false;
-
-    statusEl.innerHTML =
-      '<span class="warn">' +
-      'Не удалось открыть камеру' +
-      '</span>';
-
-  } finally {
-
-    cameraStarting = false;
   }
+
+
+  cameraStarting = false;
 }
 
 
 async function stopCamera() {
 
-  if (
-    !cameraRunning &&
-    !cameraStarting
-  ) {
-    return;
+  /*
+    Если камера ещё запускается,
+    немного ждём завершения scanner.start().
+  */
+  if (cameraStarting) {
+
+    for (
+      let i = 0;
+      i < 20 && cameraStarting;
+      i++
+    ) {
+
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            50
+          )
+      );
+    }
   }
 
 
@@ -1687,6 +1777,7 @@ async function stopCamera() {
 
 
   cameraRunning = false;
+  cameraStarting = false;
 }
 
 
