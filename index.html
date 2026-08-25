@@ -1230,7 +1230,8 @@ function beep(
   frequency,
   duration,
   delay = 0,
-  volume = 0.12
+  volume = 0.24,
+  type = 'sine'
 ) {
 
   const ctx =
@@ -1254,7 +1255,8 @@ function beep(
 
 
   oscillator.type =
-    'sine';
+    type;
+
 
   oscillator.frequency
     .setValueAtTime(
@@ -1269,11 +1271,24 @@ function beep(
       start
     );
 
+
   gain.gain
     .exponentialRampToValueAtTime(
       volume,
-      start + 0.01
+      start + 0.008
     );
+
+
+  gain.gain
+    .setValueAtTime(
+      volume,
+      start +
+      Math.max(
+        0.01,
+        duration / 1000 - 0.025
+      )
+    );
+
 
   gain.gain
     .exponentialRampToValueAtTime(
@@ -1282,14 +1297,20 @@ function beep(
     );
 
 
-  oscillator.connect(gain);
+  oscillator.connect(
+    gain
+  );
+
 
   gain.connect(
     ctx.destination
   );
 
 
-  oscillator.start(start);
+  oscillator.start(
+    start
+  );
+
 
   oscillator.stop(
     start +
@@ -1299,38 +1320,65 @@ function beep(
 }
 
 
+/*
+  УДАЧНЫЙ СКАН.
+
+  Примерно в 2 раза громче прежнего.
+  Два коротких высоких сигнала.
+*/
 function playSuccess() {
 
   beep(
     1050,
-    70,
+    80,
     0,
-    0.12
+    0.24,
+    'sine'
   );
 
+
   beep(
-    1500,
+    1550,
+    100,
     90,
-    90,
-    0.12
+    0.24,
+    'sine'
   );
 }
 
 
+/*
+  ОШИБОЧНЫЙ СКАН.
+
+  Более резкий неприятный звук:
+  квадратная волна + нисходящие частоты.
+*/
 function playError() {
 
   beep(
-    230,
-    150,
+    420,
+    130,
     0,
-    0.16
+    0.32,
+    'square'
   );
 
+
   beep(
-    180,
-    190,
-    180,
-    0.16
+    280,
+    150,
+    110,
+    0.32,
+    'square'
+  );
+
+
+  beep(
+    170,
+    220,
+    240,
+    0.34,
+    'sawtooth'
   );
 }
 
