@@ -35,13 +35,19 @@
     }
 
     .topbar {
-      max-width: 420px;
-      margin: 0 auto 10px;
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      min-height: 24px;
-    }
+  width: 100%;
+  max-width: 420px;
+
+  margin: 0 auto 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 8px;
+
+  min-height: 34px;
+}
 
     #netState {
       display: inline-flex;
@@ -79,35 +85,76 @@
 
 .scan-mode-switch {
   display: flex;
-  gap: 6px;
-  width: 100%;
-  max-width: 420px;
-  margin: 0 auto 8px;
+  align-items: center;
+
+  gap: 4px;
+
+  width: auto;
+  margin: 0;
 }
 
+/*
+  Важно:
+  глобальные стили button ниже в файле
+  не должны растягивать эти кнопки.
+*/
 .scan-mode-btn {
-  flex: 1;
   display: flex !important;
+
   width: auto !important;
   max-width: none !important;
-  min-height: 38px !important;
+
+  min-width: 58px !important;
+  min-height: 32px !important;
+
   margin: 0 !important;
-  padding: 8px 12px !important;
+
+  padding: 5px 9px !important;
 
   justify-content: center;
   align-items: center;
 
-  border-radius: 9px !important;
+  border: none !important;
+  border-radius: 8px !important;
+
   background: #dedede !important;
   color: #444 !important;
 
-  font-size: 14px !important;
-  font-weight: 600;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  font-weight: 600 !important;
+
+  white-space: nowrap;
+
+  cursor: pointer;
+
+  -webkit-tap-highlight-color: transparent;
 }
 
 .scan-mode-btn.active {
   background: #1a73e8 !important;
   color: #fff !important;
+}
+
+
+/*
+  Онлайн остаётся справа.
+*/
+#netState {
+  flex: 0 0 auto;
+}
+
+
+/*
+  По областям ТСД и камеры можно
+  делать горизонтальный свайп.
+
+  Вертикальная прокрутка страницы
+  при этом остаётся рабочей.
+*/
+#tsd-wrap,
+#reader-wrap {
+  touch-action: pan-y;
 }
 
 
@@ -619,27 +666,35 @@ body {
 
 <body>
 
+
   <div class="topbar">
-    <span id="netState">Онлайн</span>
+
+  <div
+    class="scan-mode-switch"
+    id="scanModeSwitch"
+  >
+
+    <button
+      type="button"
+      id="btnModeTsd"
+      class="scan-mode-btn active"
+    >
+      ТСД
+    </button>
+
+    <button
+      type="button"
+      id="btnModeCamera"
+      class="scan-mode-btn"
+    >
+      Камера
+    </button>
+
   </div>
 
-  <div class="scan-mode-switch">
-
-  <button
-    type="button"
-    id="btnModeTsd"
-    class="scan-mode-btn active"
-  >
-    ТСД
-  </button>
-
-  <button
-    type="button"
-    id="btnModeCamera"
-    class="scan-mode-btn"
-  >
-    Камера
-  </button>
+  <span id="netState">
+    Онлайн
+  </span>
 
 </div>
 
@@ -1476,29 +1531,57 @@ function getScanPrompt() {
 }
 
 
-function focusTsd() {
+function focusTsd(
+  force = false
+) {
 
   if (
-    scanSource !== 'tsd' ||
+    scanSource !== 'tsd'
+  ) {
+    return;
+  }
+
+
+  /*
+    При обычной работе ставим курсор,
+    только когда требуется скан.
+
+    force=true используется при ручном
+    переключении Камера → ТСД.
+  */
+  if (
+    !force &&
     !scannerNeedsInput()
   ) {
     return;
   }
 
 
+  /*
+    Поле должно оставаться доступным,
+    иначе браузер не сможет поставить
+    в него курсор.
+  */
+  tsdInput.disabled =
+    false;
+
+
   setTimeout(
     () => {
 
       try {
+
         tsdInput.focus({
           preventScroll: true
         });
+
       } catch (e) {
+
         tsdInput.focus();
       }
 
     },
-    30
+    20
   );
 }
 
@@ -1514,6 +1597,7 @@ function updateScanSurface() {
     scanSource === 'tsd'
   );
 
+
   btnModeCamera.classList.toggle(
     'active',
     scanSource === 'camera'
@@ -1524,6 +1608,10 @@ function updateScanSurface() {
     getScanPrompt();
 
 
+  // =====================================================
+  // ТСД
+  // =====================================================
+
   if (
     scanSource === 'tsd'
   ) {
@@ -1531,33 +1619,45 @@ function updateScanSurface() {
     el('tsd-wrap').style.display =
       'block';
 
+
     el('reader-wrap').style.display =
-      'none';
-
-
-    tsdInput.disabled =
-      !needsInput;
-
-
-    if (needsInput) {
-      focusTsd();
-    }
-
-  } else {
-
-    el('tsd-wrap').style.display =
       'none';
 
 
     /*
-      Во время упаковки камера вообще
-      не показывается.
+      Поле не блокируем.
+
+      Это позволяет при переключении
+      Камера → ТСД сразу вернуть курсор.
     */
-    el('reader-wrap').style.display =
-      needsInput
-        ? 'block'
-        : 'none';
+    tsdInput.disabled =
+      false;
+
+
+    return;
   }
+
+
+  // =====================================================
+  // КАМЕРА
+  // =====================================================
+
+  el('tsd-wrap').style.display =
+    'none';
+
+
+  /*
+    Камеру показываем только на этапах,
+    где реально требуется сканирование.
+
+    Во время физической упаковки камера
+    остаётся выключенной и не расходует
+    аккумулятор.
+  */
+  el('reader-wrap').style.display =
+    needsInput
+      ? 'block'
+      : 'none';
 }
 
 
@@ -1583,154 +1683,121 @@ async function startCamera() {
   }
 
 
-  cameraStarting = true;
+  cameraStarting =
+    true;
 
+
+  /*
+    Перед запуском камера должна иметь
+    видимый контейнер.
+  */
   el('reader-wrap').style.display =
     'block';
 
 
-  /*
-    Ширина зоны рассчитывается так,
-    чтобы qrbox гарантированно помещался
-    даже на узких телефонах.
-  */
- const qrWidth =
-  Math.min(
-    380,
-    Math.max(
-      240,
-      window.innerWidth - 40
-    )
-  );
+  const qrWidth =
+    Math.min(
+      370,
+      Math.max(
+        230,
+        window.innerWidth - 50
+      )
+    );
 
 
   const scannerConfig = {
-  fps: 20,
 
-  /*
-    Широкая область под обычный 1D штрихкод.
-  */
-  qrbox: {
-  width: qrWidth,
-  height: 100
-},
+    fps: 20,
 
-  /*
-    Просим у телефона именно горизонтальный поток.
-  */
-  videoConstraints: {
-    facingMode: 'environment',
-
-    width: {
-      ideal: 1280
+    /*
+      Широкая зона специально
+      под одномерные штрихкоды.
+    */
+    qrbox: {
+      width: qrWidth,
+      height: 95
     },
 
-    height: {
-      ideal: 720
-    },
+    disableFlip: true
+  };
 
-    aspectRatio: {
-      ideal: 16 / 9
-    }
-  },
 
-  disableFlip: true
-};
+  let started =
+    false;
 
 
   try {
 
     /*
-      Сначала используем самый совместимый
-      способ выбора задней камеры.
+      Вариант №1.
 
-      Именно такой вариант у тебя работал
-      в старой версии.
+      Просим заднюю камеру и по возможности
+      горизонтальный поток.
     */
-
     await scanner.start(
 
-  {
-    facingMode: 'environment',
+      {
+        facingMode: {
+          ideal: 'environment'
+        },
 
-    width: {
-      ideal: 1280
-    },
+        width: {
+          ideal: 1280
+        },
 
-    height: {
-      ideal: 720
-    },
+        height: {
+          ideal: 720
+        },
 
-    aspectRatio: {
-      ideal: 16 / 9
-    }
-  },
+        aspectRatio: {
+          ideal: 16 / 9
+        }
+      },
 
-  scannerConfig,
+      scannerConfig,
 
-  onCameraScan
-);
+      onCameraScan
+    );
 
 
-    cameraRunning = true;
+    started =
+      true;
 
 
   } catch (firstError) {
 
     /*
-      На некоторых телефонах facingMode
-      работает плохо.
-
-      Тогда получаем реальный список камер
-      и явно выбираем заднюю.
+      После неудачного старта даём библиотеке
+      полностью освободить внутреннее состояние.
     */
     try {
-
-      await scanner
-        .stop()
-        .catch(() => {});
+      await scanner.stop();
+    } catch (e) {}
 
 
-      const cameras =
-        await Html5Qrcode.getCameras();
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          120
+        )
+    );
 
 
-      if (
-        !cameras ||
-        !cameras.length
-      ) {
-        throw firstError;
-      }
-
+    try {
 
       /*
-        Пытаемся найти камеру по названию.
+        Вариант №2.
+
+        Более простой режим для телефонов,
+        которым не нравятся дополнительные
+        ограничения камеры.
       */
-      let selectedCamera =
-        cameras.find(camera =>
-          /back|rear|environment|зад/i.test(
-            camera.label || ''
-          )
-        );
-
-
-      /*
-        На телефонах задняя камера обычно
-        последняя в списке.
-
-        Это запасной вариант.
-      */
-      if (!selectedCamera) {
-        selectedCamera =
-          cameras[
-            cameras.length - 1
-          ];
-      }
-
-
       await scanner.start(
 
-        selectedCamera.id,
+        {
+          facingMode: 'environment'
+        },
 
         scannerConfig,
 
@@ -1738,132 +1805,224 @@ async function startCamera() {
       );
 
 
-      cameraRunning = true;
+      started =
+        true;
 
 
     } catch (secondError) {
 
-      cameraRunning = false;
+      try {
+        await scanner.stop();
+      } catch (e) {}
 
 
-      console.error(
-        'Ошибка запуска камеры:',
-        firstError,
-        secondError
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            120
+          )
       );
 
 
-      statusEl.innerHTML =
-        '<span class="warn">' +
-        'Не удалось открыть камеру' +
-        '</span>' +
+      try {
 
-        '<br>' +
+        /*
+          Вариант №3.
 
-        '<small>' +
-        'Проверьте разрешение на использование камеры' +
-        '</small>';
+          Получаем список физических камер
+          и выбираем заднюю явно.
+        */
+        const cameras =
+          await Html5Qrcode.getCameras();
+
+
+        if (
+          !cameras ||
+          !cameras.length
+        ) {
+          throw secondError;
+        }
+
+
+        let selectedCamera =
+          cameras.find(
+            camera =>
+              /back|rear|environment|зад/i.test(
+                camera.label || ''
+              )
+          );
+
+
+        if (!selectedCamera) {
+
+          selectedCamera =
+            cameras[
+              cameras.length - 1
+            ];
+        }
+
+
+        await scanner.start(
+
+          selectedCamera.id,
+
+          scannerConfig,
+
+          onCameraScan
+        );
+
+
+        started =
+          true;
+
+
+      } catch (thirdError) {
+
+        console.error(
+          'Не удалось открыть камеру:',
+          firstError,
+          secondError,
+          thirdError
+        );
+      }
     }
   }
 
 
-  /*
-    Если камера успешно открылась —
-    отдельно настраиваем её возможности.
-
-    Эти настройки НЕ участвуют в самом
-    открытии камеры, поэтому телефон,
-    который их не поддерживает,
-    всё равно сможет сканировать.
-  */
-  if (cameraRunning) {
-
-    try {
-
-      const caps =
-        scanner
-          .getRunningTrackCapabilities();
+  cameraRunning =
+    started;
 
 
-      /*
-        Убираем аппаратный зум.
-      */
-      if (
-        caps &&
-        caps.zoom &&
-        typeof caps.zoom.min === 'number'
-      ) {
-
-        scanner
-          .applyVideoConstraints({
-            advanced: [
-              {
-                zoom: caps.zoom.min
-              }
-            ]
-          })
-          .catch(() => {});
-      }
+  cameraStarting =
+    false;
 
 
-      /*
-        Continuous autofocus применяем
-        ОТДЕЛЬНО от zoom.
+  if (!started) {
 
-        Так ошибка одной настройки
-        не ломает вторую.
-      */
-      if (
-        caps &&
-        Array.isArray(
-          caps.focusMode
-        ) &&
-        caps.focusMode.includes(
-          'continuous'
-        )
-      ) {
+    /*
+      Если пользователь за время запуска
+      уже вернулся в ТСД, ошибку не показываем.
+    */
+    if (
+      scanSource === 'camera'
+    ) {
 
-        scanner
-          .applyVideoConstraints({
-            advanced: [
-              {
-                focusMode: 'continuous'
-              }
-            ]
-          })
-          .catch(() => {});
-      }
+      statusEl.innerHTML =
+        '<span class="warn">' +
+        'Не удалось открыть камеру' +
+        '</span>';
+    }
 
-    } catch (e) {}
+
+    return;
   }
 
 
-  cameraStarting = false;
+  /*
+    Если пока камера запускалась пользователь
+    уже переключился обратно на ТСД —
+    сразу выключаем видеопоток.
+  */
+  if (
+    scanSource !== 'camera'
+  ) {
+
+    await stopCamera();
+
+    return;
+  }
+
+
+  /*
+    Дополнительные настройки применяются
+    ПОСЛЕ успешного открытия камеры.
+  */
+  try {
+
+    const caps =
+      scanner
+        .getRunningTrackCapabilities();
+
+
+    /*
+      Минимальный аппаратный zoom.
+    */
+    if (
+      caps &&
+      caps.zoom &&
+      typeof caps.zoom.min === 'number'
+    ) {
+
+      scanner
+        .applyVideoConstraints({
+          advanced: [
+            {
+              zoom: caps.zoom.min
+            }
+          ]
+        })
+        .catch(() => {});
+    }
+
+
+    /*
+      Непрерывный автофокус.
+    */
+    if (
+      caps &&
+      Array.isArray(
+        caps.focusMode
+      ) &&
+      caps.focusMode.includes(
+        'continuous'
+      )
+    ) {
+
+      scanner
+        .applyVideoConstraints({
+          advanced: [
+            {
+              focusMode: 'continuous'
+            }
+          ]
+        })
+        .catch(() => {});
+    }
+
+  } catch (e) {}
 }
 
 
 async function stopCamera() {
 
   /*
-    Если камера ещё запускается,
-    немного ждём завершения scanner.start().
+    Если scanner.start() ещё выполняется,
+    ждём его завершения.
+
+    Иначе переключение туда-сюда может
+    оставить Html5Qrcode в промежуточном
+    состоянии.
   */
-  if (cameraStarting) {
+  let attempts =
+    0;
 
-    for (
-      let i = 0;
-      i < 20 && cameraStarting;
-      i++
-    ) {
 
-      await new Promise(
-        resolve =>
-          setTimeout(
-            resolve,
-            50
-          )
-      );
-    }
+  while (
+    cameraStarting &&
+    attempts < 30
+  ) {
+
+    await new Promise(
+      resolve =>
+        setTimeout(
+          resolve,
+          30
+        )
+    );
+
+
+    attempts++;
   }
 
 
@@ -1874,8 +2033,11 @@ async function stopCamera() {
   } catch (e) {}
 
 
-  cameraRunning = false;
-  cameraStarting = false;
+  cameraRunning =
+    false;
+
+  cameraStarting =
+    false;
 }
 
 
@@ -1883,7 +2045,12 @@ async function stopCamera() {
 // ПЕРЕКЛЮЧЕНИЕ ТСД / КАМЕРА
 // =========================================================
 
-async function setScanSource(source) {
+let scanSwitchId = 0;
+
+
+async function setScanSource(
+  source
+) {
 
   if (
     source !== 'tsd' &&
@@ -1893,61 +2060,285 @@ async function setScanSource(source) {
   }
 
 
-  scanSource = source;
+  /*
+    Каждый новый тап или свайп отменяет
+    последствия предыдущего переключения.
+  */
+  const switchId =
+    ++scanSwitchId;
 
 
-  updateScanSurface();
+  scanSource =
+    source;
 
+
+  // =====================================================
+  // ПЕРЕКЛЮЧЕНИЕ НА ТСД
+  // =====================================================
 
   if (
     source === 'tsd'
   ) {
 
+    /*
+      Сразу меняем интерфейс,
+      чтобы пользователь не ждал stop().
+    */
+    updateScanSurface();
+
+
+    /*
+      Снимаем фокус с видеорежима
+      и полностью выключаем камеру.
+    */
     await stopCamera();
+
+
+    if (
+      switchId !== scanSwitchId ||
+      scanSource !== 'tsd'
+    ) {
+      return;
+    }
+
 
     updateScanSurface();
 
-    focusTsd();
+
+    /*
+      ВАЖНО:
+      сразу возвращаем курсор в поле ТСД.
+    */
+    focusTsd(true);
+
 
     return;
   }
 
 
+  // =====================================================
+  // ПЕРЕКЛЮЧЕНИЕ НА КАМЕРУ
+  // =====================================================
+
   /*
-    Нажатие на кнопку одновременно
-    разрешает WebAudio на мобильном.
+    Убираем курсор из поля ТСД.
   */
-  getAudioContext();
+  try {
+    tsdInput.blur();
+  } catch (e) {}
+
+
+  updateScanSurface();
+
+
+  /*
+    Сначала убираем возможный старый
+    видеопоток.
+
+    Это позволяет несколько раз подряд
+    делать:
+
+    ТСД → Камера → ТСД → Камера
+  */
+  await stopCamera();
 
 
   if (
+    switchId !== scanSwitchId ||
+    scanSource !== 'camera'
+  ) {
+    return;
+  }
+
+
+  await new Promise(
+    resolve =>
+      setTimeout(
+        resolve,
+        80
+      )
+  );
+
+
+  if (
+    switchId !== scanSwitchId ||
+    scanSource !== 'camera'
+  ) {
+    return;
+  }
+
+
+  updateScanSurface();
+
+
+  /*
+    Камера запускается на любом этапе,
+    где сейчас ожидается штрихкод:
+    коробка, товар или подтверждение коробки.
+  */
+  if (
     scannerNeedsInput()
   ) {
+
     await startCamera();
   }
 }
 
 
 btnModeTsd.onclick =
-  () => {
+  async () => {
 
     getAudioContext();
 
-    setScanSource(
+    await setScanSource(
       'tsd'
     );
   };
 
 
 btnModeCamera.onclick =
-  () => {
+  async () => {
 
     getAudioContext();
 
-    setScanSource(
+    await setScanSource(
       'camera'
     );
   };
+
+    // =========================================================
+// СВАЙП ТСД / КАМЕРА
+// =========================================================
+
+let swipeStartX = 0;
+let swipeStartY = 0;
+
+
+/*
+  Свайп работает непосредственно
+  по текущему полю сканирования.
+
+  Влево  → Камера
+  Вправо → ТСД
+*/
+function addScanSwipe(
+  element
+) {
+
+  element.addEventListener(
+    'touchstart',
+    event => {
+
+      if (
+        !event.touches ||
+        event.touches.length !== 1
+      ) {
+        return;
+      }
+
+
+      swipeStartX =
+        event.touches[0].clientX;
+
+      swipeStartY =
+        event.touches[0].clientY;
+
+    },
+    {
+      passive: true
+    }
+  );
+
+
+  element.addEventListener(
+    'touchend',
+    event => {
+
+      if (
+        !event.changedTouches ||
+        event.changedTouches.length !== 1
+      ) {
+        return;
+      }
+
+
+      const endX =
+        event.changedTouches[0].clientX;
+
+      const endY =
+        event.changedTouches[0].clientY;
+
+
+      const dx =
+        endX - swipeStartX;
+
+      const dy =
+        endY - swipeStartY;
+
+
+      /*
+        Короткое движение считаем обычным
+        нажатием, а не свайпом.
+      */
+      if (
+        Math.abs(dx) < 55
+      ) {
+        return;
+      }
+
+
+      /*
+        Вертикальная прокрутка страницы
+        не должна переключать сканер.
+      */
+      if (
+        Math.abs(dx) <
+        Math.abs(dy) * 1.2
+      ) {
+        return;
+      }
+
+
+      getAudioContext();
+
+
+      /*
+        Свайп ВЛЕВО.
+      */
+      if (
+        dx < 0
+      ) {
+
+        setScanSource(
+          'camera'
+        );
+
+        return;
+      }
+
+
+      /*
+        Свайп ВПРАВО.
+      */
+      setScanSource(
+        'tsd'
+      );
+    },
+    {
+      passive: true
+    }
+  );
+}
+
+
+addScanSwipe(
+  el('tsd-wrap')
+);
+
+
+addScanSwipe(
+  el('reader-wrap')
+);
 
 
 // =========================================================
@@ -2485,7 +2876,11 @@ document.addEventListener(
 
 updateScanSurface();
 
-focusTsd();
+/*
+  После загрузки по умолчанию ТСД
+  и курсор сразу находится в поле.
+*/
+focusTsd(true);
 
 
 // =========================================================
