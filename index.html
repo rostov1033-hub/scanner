@@ -1223,8 +1223,21 @@ const btnModeCamera =
   el('btnModeCamera');
 
 
-const scanner =
-  new Html5Qrcode(
+let scanner = null;
+
+/*
+  Номер текущего запуска камеры.
+
+  Нужен, чтобы старый незавершённый start()
+  не мог включить камеру после переключения
+  обратно на ТСД.
+*/
+let cameraGeneration = 0;
+
+
+function createCameraScanner() {
+
+  return new Html5Qrcode(
     'reader',
     {
       experimentalFeatures: {
@@ -1232,14 +1245,15 @@ const scanner =
       },
 
       formatsToSupport: [
-  Html5QrcodeSupportedFormats.CODE_128,
-  Html5QrcodeSupportedFormats.EAN_13,
-  Html5QrcodeSupportedFormats.EAN_8,
-  Html5QrcodeSupportedFormats.CODE_39,
-  Html5QrcodeSupportedFormats.ITF
-]
+        Html5QrcodeSupportedFormats.CODE_128,
+        Html5QrcodeSupportedFormats.EAN_13,
+        Html5QrcodeSupportedFormats.EAN_8,
+        Html5QrcodeSupportedFormats.CODE_39,
+        Html5QrcodeSupportedFormats.ITF
+      ]
     }
   );
+}
 
 
 // =========================================================
@@ -1665,6 +1679,30 @@ function updateScanSurface() {
 // КАМЕРА
 // =========================================================
 
+async function releaseCameraInstance(
+  instance
+) {
+
+  if (!instance) {
+    return;
+  }
+
+
+  try {
+    await instance.stop();
+  } catch (e) {}
+
+
+  try {
+    await instance.clear();
+  } catch (e) {}
+}
+
+
+// =========================================================
+// ЗАПУСК КАМЕРЫ
+// =========================================================
+
 async function startCamera() {
 
   if (
@@ -1683,75 +1721,101 @@ async function startCamera() {
   }
 
 
+  const generation =
+    ++cameraGeneration;
+
+
   cameraStarting =
     true;
 
 
   /*
-    Перед запуском камера должна иметь
-    видимый контейнер.
+    Сначала показываем контейнер.
+
+    html5-qrcode должен запускаться
+    внутри уже видимого блока.
   */
   el('reader-wrap').style.display =
     'block';
 
 
-  const qrWidth =
+  /*
+    Даём браузеру реально отрисовать
+    контейнер перед scanner.start().
+  */
+  await new Promise(
+    resolve =>
+      requestAnimationFrame(
+        () => resolve()
+      )
+  );
+
+
+  const readerWidth =
+    el('reader-wrap').clientWidth ||
     Math.min(
-      370,
-      Math.max(
-        230,
-        window.innerWidth - 50
+      420,
+      window.innerWidth - 24
+    );
+
+
+  /*
+    qrbox гарантированно не выходит
+    за размеры окна камеры.
+  */
+  const qrWidth =
+    Math.max(
+      180,
+      Math.min(
+        300,
+        readerWidth - 24
       )
     );
 
 
+  /*
+    Намеренно простой конфиг.
+
+    Не задаём здесь aspectRatio,
+    разрешение камеры и другие жёсткие
+    ограничения — именно они ломают
+    запуск на части телефонов.
+  */
   const scannerConfig = {
 
-    fps: 20,
+    fps: 15,
 
-    /*
-      Широкая зона специально
-      под одномерные штрихкоды.
-    */
     qrbox: {
       width: qrWidth,
-      height: 95
+      height: 90
     },
 
     disableFlip: true
   };
 
 
+  let localScanner =
+    createCameraScanner();
+
+
+  scanner =
+    localScanner;
+
+
   let started =
     false;
 
 
+  // =====================================================
+  // ПОПЫТКА №1 — обычная задняя камера
+  // =====================================================
+
   try {
 
-    /*
-      Вариант №1.
-
-      Просим заднюю камеру и по возможности
-      горизонтальный поток.
-    */
-    await scanner.start(
+    await localScanner.start(
 
       {
-        facingMode: {
-          ideal: 'environment'
-        },
-
-        width: {
-          ideal: 1280
-        },
-
-        height: {
-          ideal: 720
-        },
-
-        aspectRatio: {
-          ideal: 16 / 9
-        }
+        facingMode: 'environment'
       },
 
       scannerConfig,
@@ -1766,38 +1830,101 @@ async function startCamera() {
 
   } catch (firstError) {
 
-    /*
-      После неудачного старта даём библиотеке
-      полностью освободить внутреннее состояние.
-    */
-    try {
-      await scanner.stop();
-    } catch (e) {}
-
-
-    await new Promise(
-      resolve =>
-        setTimeout(
-          resolve,
-          120
-        )
+    console.warn(
+      'Первый запуск камеры не удался:',
+      firstError
     );
 
 
+    /*
+      ВАЖНО:
+      сломанный экземпляр больше
+      повторно не используем.
+    */
+    await releaseCameraInstance(
+      localScanner
+    );
+
+
+    /*
+      Пользователь мог уже переключиться
+      обратно на ТСД.
+    */
+    if (
+      generation !== cameraGeneration ||
+      scanSource !== 'camera'
+    ) {
+
+      cameraStarting =
+        false;
+
+      return;
+    }
+
+
+    // ===================================================
+    // ПОПЫТКА №2 — выбираем физическую камеру
+    // ===================================================
+
     try {
 
+      const cameras =
+        await Html5Qrcode.getCameras();
+
+
+      if (
+        !cameras ||
+        !cameras.length
+      ) {
+
+        throw new Error(
+          'Камеры не найдены'
+        );
+      }
+
+
       /*
-        Вариант №2.
-
-        Более простой режим для телефонов,
-        которым не нравятся дополнительные
-        ограничения камеры.
+        Ищем заднюю камеру по названию.
       */
-      await scanner.start(
+      let selectedCamera =
+        cameras.find(
+          camera =>
+            /back|rear|environment|зад/i.test(
+              camera.label || ''
+            )
+        );
 
-        {
-          facingMode: 'environment'
-        },
+
+      /*
+        Если браузер не дал названия камер,
+        на телефонах задняя камера чаще всего
+        находится последней в списке.
+      */
+      if (!selectedCamera) {
+
+        selectedCamera =
+          cameras[
+            cameras.length - 1
+          ];
+      }
+
+
+      /*
+        Создаём НОВЫЙ Html5Qrcode,
+        а не используем экземпляр,
+        на котором первый start() упал.
+      */
+      localScanner =
+        createCameraScanner();
+
+
+      scanner =
+        localScanner;
+
+
+      await localScanner.start(
+
+        selectedCamera.id,
 
         scannerConfig,
 
@@ -1811,150 +1938,110 @@ async function startCamera() {
 
     } catch (secondError) {
 
-      try {
-        await scanner.stop();
-      } catch (e) {}
-
-
-      await new Promise(
-        resolve =>
-          setTimeout(
-            resolve,
-            120
-          )
+      console.error(
+        'Не удалось открыть камеру:',
+        firstError,
+        secondError
       );
 
 
-      try {
-
-        /*
-          Вариант №3.
-
-          Получаем список физических камер
-          и выбираем заднюю явно.
-        */
-        const cameras =
-          await Html5Qrcode.getCameras();
-
-
-        if (
-          !cameras ||
-          !cameras.length
-        ) {
-          throw secondError;
-        }
-
-
-        let selectedCamera =
-          cameras.find(
-            camera =>
-              /back|rear|environment|зад/i.test(
-                camera.label || ''
-              )
-          );
-
-
-        if (!selectedCamera) {
-
-          selectedCamera =
-            cameras[
-              cameras.length - 1
-            ];
-        }
-
-
-        await scanner.start(
-
-          selectedCamera.id,
-
-          scannerConfig,
-
-          onCameraScan
-        );
-
-
-        started =
-          true;
-
-
-      } catch (thirdError) {
-
-        console.error(
-          'Не удалось открыть камеру:',
-          firstError,
-          secondError,
-          thirdError
-        );
-      }
+      await releaseCameraInstance(
+        localScanner
+      );
     }
   }
 
 
-  cameraRunning =
-    started;
+  /*
+    Пока камера открывалась,
+    пользователь мог свайпнуть обратно на ТСД.
+  */
+  if (
+    generation !== cameraGeneration ||
+    scanSource !== 'camera' ||
+    !scannerNeedsInput()
+  ) {
 
+    await releaseCameraInstance(
+      localScanner
+    );
+
+
+    if (
+      scanner === localScanner
+    ) {
+      scanner = null;
+    }
+
+
+    cameraRunning =
+      false;
+
+    cameraStarting =
+      false;
+
+
+    return;
+  }
+
+
+  if (!started) {
+
+    scanner =
+      null;
+
+    cameraRunning =
+      false;
+
+    cameraStarting =
+      false;
+
+
+    statusEl.innerHTML =
+      '<span class="warn">' +
+      'Не удалось открыть камеру' +
+      '</span>' +
+
+      '<br>' +
+
+      '<small>' +
+      'Проверьте разрешение камеры в браузере' +
+      '</small>';
+
+
+    return;
+  }
+
+
+  cameraRunning =
+    true;
 
   cameraStarting =
     false;
 
 
-  if (!started) {
+  // =====================================================
+  // ДОПОЛНИТЕЛЬНАЯ НАСТРОЙКА КАМЕРЫ
+  // =====================================================
 
-    /*
-      Если пользователь за время запуска
-      уже вернулся в ТСД, ошибку не показываем.
-    */
-    if (
-      scanSource === 'camera'
-    ) {
-
-      statusEl.innerHTML =
-        '<span class="warn">' +
-        'Не удалось открыть камеру' +
-        '</span>';
-    }
-
-
-    return;
-  }
-
-
-  /*
-    Если пока камера запускалась пользователь
-    уже переключился обратно на ТСД —
-    сразу выключаем видеопоток.
-  */
-  if (
-    scanSource !== 'camera'
-  ) {
-
-    await stopCamera();
-
-    return;
-  }
-
-
-  /*
-    Дополнительные настройки применяются
-    ПОСЛЕ успешного открытия камеры.
-  */
   try {
 
     const caps =
-      scanner
+      localScanner
         .getRunningTrackCapabilities();
 
 
     /*
-      Минимальный аппаратный zoom.
-    */
+      Сбрасываем аппаратный зум
+      на минимальное значение.
+  */
     if (
       caps &&
       caps.zoom &&
       typeof caps.zoom.min === 'number'
     ) {
 
-      scanner
+      localScanner
         .applyVideoConstraints({
           advanced: [
             {
@@ -1967,7 +2054,8 @@ async function startCamera() {
 
 
     /*
-      Непрерывный автофокус.
+      Если телефон поддерживает
+      постоянный автофокус — включаем.
     */
     if (
       caps &&
@@ -1979,7 +2067,7 @@ async function startCamera() {
       )
     ) {
 
-      scanner
+      localScanner
         .applyVideoConstraints({
           advanced: [
             {
@@ -1991,6 +2079,45 @@ async function startCamera() {
     }
 
   } catch (e) {}
+}
+
+
+// =========================================================
+// ОСТАНОВКА КАМЕРЫ
+// =========================================================
+
+async function stopCamera() {
+
+  /*
+    Делает любой выполняющийся startCamera()
+    устаревшим.
+  */
+  cameraGeneration++;
+
+
+  const localScanner =
+    scanner;
+
+
+  scanner =
+    null;
+
+
+  cameraRunning =
+    false;
+
+  cameraStarting =
+    false;
+
+
+  if (!localScanner) {
+    return;
+  }
+
+
+  await releaseCameraInstance(
+    localScanner
+  );
 }
 
 
