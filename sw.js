@@ -1,5 +1,5 @@
 const CACHE_NAME =
-  'box-scanner-v7';
+  'box-scanner-v8';
 
 const LOCAL_FILES = [
   './',
@@ -231,13 +231,16 @@ self.addEventListener(
             - собственные файлы
             - html5-qrcode с unpkg
           */
-          if (
-            url.origin ===
-              self.location.origin ||
+         if (
+  url.origin ===
+    self.location.origin ||
 
-            url.hostname ===
-              'unpkg.com'
-          ) {
+  url.hostname ===
+    'unpkg.com' ||
+
+  url.hostname ===
+    'cdn.jsdelivr.net'
+) {
 
             const cache =
               await caches.open(
