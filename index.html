@@ -210,15 +210,23 @@
   height: 150px !important;
 
   /*
-    contain не обрезает изображение камеры,
-    поэтому на телефонах не создаётся
-    дополнительный визуальный зум.
+    Камера должна занимать всё горизонтальное окно.
+    Чёрных полей справа и слева быть не должно.
   */
-  object-fit: contain !important;
+  object-fit: cover !important;
+
+  object-position: center center !important;
 
   background: #000;
 }
 
+/*
+  Само окно остаётся широким и компактным.
+*/
+#reader-wrap,
+#reader {
+  aspect-ratio: auto !important;
+}
 
 /*
   Убираем стандартную рамку html5-qrcode.
@@ -1522,35 +1530,48 @@ async function startCamera() {
     чтобы qrbox гарантированно помещался
     даже на узких телефонах.
   */
-  const qrWidth =
-    Math.min(
-      340,
-      Math.max(
-        220,
-        window.innerWidth - 60
-      )
-    );
+ const qrWidth =
+  Math.min(
+    380,
+    Math.max(
+      240,
+      window.innerWidth - 40
+    )
+  );
 
 
   const scannerConfig = {
+  fps: 20,
 
-    /*
-      20 кадров достаточно быстро,
-      но не создаёт чрезмерную нагрузку.
-    */
-    fps: 20,
+  /*
+    Широкая область под обычный 1D штрихкод.
+  */
+  qrbox: {
+  width: qrWidth,
+  height: 100
+},
 
-    /*
-      Для длинных одномерных штрихкодов
-      нужна широкая и низкая область.
-    */
-    qrbox: {
-      width: qrWidth,
-      height: 90
+  /*
+    Просим у телефона именно горизонтальный поток.
+  */
+  videoConstraints: {
+    facingMode: 'environment',
+
+    width: {
+      ideal: 1280
     },
 
-    disableFlip: true
-  };
+    height: {
+      ideal: 720
+    },
+
+    aspectRatio: {
+      ideal: 16 / 9
+    }
+  },
+
+  disableFlip: true
+};
 
 
   try {
@@ -1562,16 +1583,29 @@ async function startCamera() {
       Именно такой вариант у тебя работал
       в старой версии.
     */
+
     await scanner.start(
 
-      {
-        facingMode: 'environment'
-      },
+  {
+    facingMode: 'environment',
 
-      scannerConfig,
+    width: {
+      ideal: 1280
+    },
 
-      onCameraScan
-    );
+    height: {
+      ideal: 720
+    },
+
+    aspectRatio: {
+      ideal: 16 / 9
+    }
+  },
+
+  scannerConfig,
+
+  onCameraScan
+);
 
 
     cameraRunning = true;
