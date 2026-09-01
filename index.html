@@ -847,6 +847,7 @@ let lastBoxCameraCode = '';
 let lastBoxCameraAt = 0;
 
 let syncBusy = false;
+    let tsdBuffer = '';
 
 
     // =========================================================
@@ -1513,7 +1514,6 @@ function scannerNeedsInput() {
   return false;
 }
 
-
 function focusTsd() {
 
   if (
@@ -1524,16 +1524,25 @@ function focusTsd() {
   }
 
 
-  tsdInput.disabled =
-    false;
+  tsdInput.disabled = false;
+
+
+  /*
+    После блокировки Android визуальный курсор
+    иногда остаётся, но аппаратный сканер
+    перестаёт отправлять данные именно в input.
+
+    Поэтому сначала реально снимаем фокус,
+    затем устанавливаем его заново.
+  */
+  try {
+    tsdInput.blur();
+  } catch (e) {}
 
 
   setTimeout(
     () => {
 
-      /*
-        За время таймера режим мог измениться.
-      */
       if (
         scanSource !== 'tsd' ||
         !scannerNeedsInput()
@@ -1554,9 +1563,10 @@ function focusTsd() {
       }
 
     },
-    20
+    100
   );
 }
+
 
 function getVisibleActionButtons() {
 
@@ -2174,6 +2184,17 @@ async function setScanSource(
   }
 
 
+  if (
+    source === 'tsd'
+  ) {
+
+    tsdBuffer = '';
+    tsdInput.value = '';
+
+    // дальше остаётся твой существующий код
+    // переключения на ТСД
+
+
   /*
     Каждый новый тап или свайп отменяет
     последствия предыдущего переключения.
@@ -2473,17 +2494,33 @@ addScanSwipe(
 // ТСД
 // =========================================================
 
-tsdInput.addEventListener(
+// =========================================================
+// ВВОД С ТСД
+//
+// Перехватываем клавиши на уровне всей страницы,
+// а не только input.
+//
+// Это позволяет сканировать после:
+// - блокировки ТСД
+// - сворачивания браузера
+// - возврата на страницу
+// - Tab-навигации по кнопкам
+// =========================================================
+
+document.addEventListener(
   'keydown',
   event => {
 
-    /*
-      Tab здесь НЕ обрабатываем.
+    if (
+      scanSource !== 'tsd' ||
+      !scannerNeedsInput()
+    ) {
+      return;
+    }
 
-      Общий обработчик навигации,
-      который будет ниже,
-      сам перенесёт фокус на следующую
-      видимую рабочую кнопку.
+
+    /*
+      Tab оставляем отдельной навигации.
     */
     if (
       event.key === 'Tab'
@@ -2493,63 +2530,131 @@ tsdInput.addEventListener(
 
 
     /*
-      Штрихкод ТСД заканчивается Enter.
+      Не вмешиваемся в системные сочетания.
     */
     if (
-      event.key !== 'Enter'
+      event.ctrlKey ||
+      event.altKey ||
+      event.metaKey
     ) {
       return;
     }
 
 
-    event.preventDefault();
+    // =====================================================
+    // ENTER — КОНЕЦ ШТРИХКОДА
+    // =====================================================
+
+    if (
+      event.key === 'Enter'
+    ) {
+
+      const value =
+        (
+          tsdBuffer ||
+          tsdInput.value
+        ).trim();
 
 
-    getAudioContext();
+      /*
+        Если данных нет и фокус находится
+        на кнопке — Enter должен нажать кнопку,
+        а не считаться пустым сканом.
+      */
+      if (!value) {
+        return;
+      }
 
 
-    const value =
-      tsdInput.value.trim();
+      event.preventDefault();
+      event.stopPropagation();
 
 
-    if (!value) {
+      getAudioContext();
 
-      focusTsd();
+
+      tsdBuffer = '';
+      tsdInput.value = '';
+
+
+      processScannedCode(
+        value,
+        'tsd'
+      );
+
+
+      if (
+        scanSource === 'tsd' &&
+        scannerNeedsInput()
+      ) {
+
+        focusTsd();
+      }
+
 
       return;
     }
 
 
-    /*
-      Сразу очищаем поле для
-      следующего сканирования.
-    */
-    tsdInput.value =
-      '';
+    // =====================================================
+    // BACKSPACE
+    // =====================================================
 
-
-    processScannedCode(
-      value,
-      'tsd'
-    );
-
-
-    /*
-      Если следующий этап тоже требует
-      сканирования — возвращаем курсор.
-
-      Если началась упаковка,
-      scannerNeedsInput() вернёт false
-      и поле будет скрыто.
-    */
     if (
-      scanSource === 'tsd' &&
-      scannerNeedsInput()
+      event.key === 'Backspace'
     ) {
 
-      focusTsd();
+      /*
+        Нужен в том числе для ручного ввода.
+      */
+      event.preventDefault();
+
+
+      tsdBuffer =
+        (
+          tsdBuffer ||
+          tsdInput.value
+        ).slice(
+          0,
+          -1
+        );
+
+
+      tsdInput.value =
+        tsdBuffer;
+
+
+      return;
     }
-  }
+
+
+    // =====================================================
+    // ОБЫЧНЫЕ СИМВОЛЫ ШТРИХКОДА
+    // =====================================================
+
+    if (
+      event.key.length === 1
+    ) {
+
+      /*
+        Теперь не важно, где реально находится
+        аппаратный фокус Android.
+
+        Даже если выбран "Все поставки",
+        очередной скан всё равно попадёт сюда.
+      */
+      event.preventDefault();
+
+
+      tsdBuffer +=
+        event.key;
+
+
+      tsdInput.value =
+        tsdBuffer;
+    }
+  },
+  true
 );
 
     // =========================================================
@@ -2727,6 +2832,15 @@ function processScannedCode(
 
   const code =
     normalizeScan(rawCode);
+
+
+  if (
+    source === 'tsd'
+  ) {
+
+    tsdBuffer = '';
+    tsdInput.value = '';
+  }
 
 
   if (!code) {
@@ -3107,21 +3221,24 @@ if (
 
 
 // =========================================================
-// СВОРАЧИВАНИЕ / ВОЗВРАТ
+// СВОРАЧИВАНИЕ / БЛОКИРОВКА / ВОЗВРАТ
 // =========================================================
 
 document.addEventListener(
   'visibilitychange',
   async () => {
 
-    /*
-      При сворачивании камера всегда
-      полностью выключается.
-    */
     if (
-      document.visibilityState !==
-      'visible'
+      document.visibilityState !== 'visible'
     ) {
+
+      /*
+        Старый незавершённый ввод после
+        блокировки не сохраняем.
+      */
+      tsdBuffer = '';
+      tsdInput.value = '';
+
 
       await stopCamera();
 
@@ -3130,10 +3247,7 @@ document.addEventListener(
 
 
     /*
-      При возвращении камера запускается
-      только если пользователь сам выбрал
-      режим "Камера" и сейчас действительно
-      нужен скан.
+      КАМЕРА
     */
     if (
       scanSource === 'camera' &&
@@ -3144,9 +3258,10 @@ document.addEventListener(
         resolve =>
           setTimeout(
             resolve,
-            250
+            300
           )
       );
+
 
       await startCamera();
 
@@ -3154,7 +3269,80 @@ document.addEventListener(
     }
 
 
-    focusTsd();
+    /*
+      ТСД
+    */
+    if (
+      scanSource === 'tsd' &&
+      scannerNeedsInput()
+    ) {
+
+      tsdBuffer = '';
+      tsdInput.value = '';
+
+
+      /*
+        Android после разблокировки иногда
+        восстанавливает страницу раньше,
+        чем активируется аппаратная клавиатура.
+
+        Поэтому переустанавливаем фокус
+        с небольшой задержкой.
+      */
+      setTimeout(
+        () => {
+          focusTsd();
+        },
+        250
+      );
+    }
+  }
+);
+
+    window.addEventListener(
+  'focus',
+  () => {
+
+    if (
+      scanSource !== 'tsd' ||
+      !scannerNeedsInput()
+    ) {
+      return;
+    }
+
+
+    setTimeout(
+      () => {
+        focusTsd();
+      },
+      200
+    );
+  }
+);
+
+
+window.addEventListener(
+  'pageshow',
+  () => {
+
+    if (
+      scanSource !== 'tsd' ||
+      !scannerNeedsInput()
+    ) {
+      return;
+    }
+
+
+    tsdBuffer = '';
+    tsdInput.value = '';
+
+
+    setTimeout(
+      () => {
+        focusTsd();
+      },
+      200
+    );
   }
 );
 
