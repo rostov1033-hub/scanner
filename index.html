@@ -161,34 +161,23 @@
 /* ===== ТСД ===== */
 
 #tsd-wrap {
+  display: block;
+
   width: 100%;
   max-width: 420px;
-  min-height: 62px;
 
   margin: 0 auto;
 
-  padding: 8px 10px;
+  padding: 5px;
 
   background: #fff;
 
   border: 2px solid #1a73e8;
-  border-radius: 10px;
+  border-radius: 9px;
 
   box-shadow: 0 1px 4px rgba(0,0,0,.10);
 }
 
-#tsdHint {
-  display: block;
-
-  margin-bottom: 5px;
-
-  text-align: center;
-
-  color: #666;
-
-  font-size: 12px;
-  font-weight: 600;
-}
 
 #tsdInput {
   display: block;
@@ -198,8 +187,8 @@
 
   padding: 4px 8px;
 
-  border: 1px solid #ddd;
-  border-radius: 6px;
+  border: none;
+  border-radius: 5px;
 
   background: #fafafa;
 
@@ -213,15 +202,30 @@
   outline: none;
 }
 
+
 #tsdInput:focus {
-  border-color: #1a73e8;
   background: #fff;
+
+  box-shadow:
+    inset 0 0 0 2px
+    rgba(26,115,232,.18);
 }
 
-#tsdInput:disabled {
-  background: #eee;
-  color: #888;
+
+/*
+  Хорошо видимый фокус при навигации
+  кнопкой Tab на ТСД.
+*/
+#btnClose:focus,
+#btnCancel:focus,
+#btnAgain:focus,
+#btnSupplies:focus {
+  outline: 3px solid #1a73e8;
+  outline-offset: 2px;
 }
+
+
+/* ===== КАМЕРА ===== */
 
 
 
@@ -614,19 +618,19 @@ body {
     }
 
     .sup-green {
-      color: #2e7d32;
-      font-weight: 600;
-    }
+  color: #0b8f3d;
+  font-weight: 700;
+}
 
-    .sup-red {
-      color: #c62828;
-      font-weight: 600;
-    }
+  .sup-red {
+  color: #c62828;
+  font-weight: 600;
+}
 
-    .sup-yellow {
-      color: #b07800;
-      font-weight: 600;
-    }
+   .sup-yellow {
+  color: #e0a000;
+  font-weight: 700;
+}
 
     /* ===== КНОПКИ ===== */
 
@@ -708,19 +712,15 @@ body {
 
 <div id="tsd-wrap">
 
-  <span id="tsdHint">
-    Сканируйте коробку
-  </span>
-
   <input
-  id="tsdInput"
-  type="text"
-  autocomplete="off"
-  autocorrect="off"
-  autocapitalize="off"
-  spellcheck="false"
-  tabindex="0"
->
+    id="tsdInput"
+    type="text"
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
+    tabindex="0"
+  >
 
 </div>
 
@@ -1220,9 +1220,6 @@ focusTsd();
 const tsdInput =
   el('tsdInput');
 
-const tsdHint =
-  el('tsdHint');
-
 const btnModeTsd =
   el('btnModeTsd');
 
@@ -1517,44 +1514,109 @@ function scannerNeedsInput() {
 }
 
 
-function getScanPrompt() {
+function focusTsd() {
 
   if (
-    mode === 'box' &&
-    !currentCode
+    scanSource !== 'tsd' ||
+    !scannerNeedsInput()
   ) {
-    return 'Сканируйте коробку';
+    return;
   }
 
 
-  if (
-    mode === 'product'
-  ) {
-    return 'Сканируйте товар';
-  }
+  tsdInput.disabled =
+    false;
 
 
-  if (
-    mode === 'confirm'
-  ) {
-    return 'Сканируйте коробку повторно';
-  }
+  setTimeout(
+    () => {
+
+      /*
+        За время таймера режим мог измениться.
+      */
+      if (
+        scanSource !== 'tsd' ||
+        !scannerNeedsInput()
+      ) {
+        return;
+      }
 
 
-  if (
-    mode === 'pack'
-  ) {
-    return 'Запакуйте коробку';
-  }
+      try {
+
+        tsdInput.focus({
+          preventScroll: true
+        });
+
+      } catch (e) {
+
+        tsdInput.focus();
+      }
+
+    },
+    20
+  );
+}
+
+function getVisibleActionButtons() {
+
+  return [
+    el('btnClose'),
+    el('btnCancel'),
+    el('btnAgain'),
+    el('btnSupplies')
+  ].filter(button => {
+
+    if (
+      !button ||
+      button.disabled
+    ) {
+      return false;
+    }
 
 
-  return 'Сканирование не требуется';
+    /*
+      offsetParent === null означает,
+      что кнопка скрыта через display:none.
+    */
+    return (
+      button.offsetParent !== null
+    );
+  });
 }
 
 
-function focusTsd(
-  force = false
-) {
+function focusFirstActionButton() {
+
+  const buttons =
+    getVisibleActionButtons();
+
+
+  if (!buttons.length) {
+    return;
+  }
+
+
+  setTimeout(
+    () => {
+
+      try {
+
+        buttons[0].focus({
+          preventScroll: true
+        });
+
+      } catch (e) {
+
+        buttons[0].focus();
+      }
+
+    },
+    20
+  );
+}
+    
+    {
 
   if (
     scanSource !== 'tsd'
@@ -1625,10 +1687,6 @@ function updateScanSurface() {
   );
 
 
-  tsdHint.textContent =
-    getScanPrompt();
-
-
   // =====================================================
   // ТСД
   // =====================================================
@@ -1637,22 +1695,41 @@ function updateScanSurface() {
     scanSource === 'tsd'
   ) {
 
-    el('tsd-wrap').style.display =
-      'block';
-
-
+    /*
+      Камера в режиме ТСД всегда скрыта.
+    */
     el('reader-wrap').style.display =
       'none';
 
 
     /*
-      Поле не блокируем.
+      Поле ТСД показываем ТОЛЬКО тогда,
+      когда реально ожидается сканирование:
 
-      Это позволяет при переключении
-      Камера → ТСД сразу вернуть курсор.
+      - коробки
+      - товара
+      - коробки при закрытии
+
+      На этапе упаковки поля нет.
     */
-    tsdInput.disabled =
-      false;
+    if (needsInput) {
+
+      el('tsd-wrap').style.display =
+        'block';
+
+      tsdInput.disabled =
+        false;
+
+    } else {
+
+      el('tsd-wrap').style.display =
+        'none';
+
+
+      try {
+        tsdInput.blur();
+      } catch (e) {}
+    }
 
 
     return;
@@ -1667,13 +1744,14 @@ function updateScanSurface() {
     'none';
 
 
-  /*
-    Камеру показываем только на этапах,
-    где реально требуется сканирование.
+  try {
+    tsdInput.blur();
+  } catch (e) {}
 
-    Во время физической упаковки камера
-    остаётся выключенной и не расходует
-    аккумулятор.
+
+  /*
+    Камера тоже показывается только тогда,
+    когда требуется очередной штрихкод.
   */
   el('reader-wrap').style.display =
     needsInput
@@ -2236,17 +2314,31 @@ async function setScanSource(
     }
 
 
-    updateScanSurface();
+updateScanSurface();
 
 
-    /*
-      ВАЖНО:
-      сразу возвращаем курсор в поле ТСД.
-    */
-    focusTsd(true);
+if (
+  scannerNeedsInput()
+) {
+
+  /*
+    Сейчас ждём скан —
+    курсор в поле ТСД.
+  */
+  focusTsd();
+
+} else {
+
+  /*
+    Сейчас упаковка —
+    поля ТСД вообще нет,
+    поэтому фокус на рабочую кнопку.
+  */
+  focusFirstActionButton();
+}
 
 
-    return;
+return;
   }
 
 
@@ -2483,44 +2575,24 @@ tsdInput.addEventListener(
   'keydown',
   event => {
 
-    // =====================================================
-    // TAB → "ВСЕ ПОСТАВКИ"
-    // =====================================================
+    /*
+      Tab здесь НЕ обрабатываем.
 
+      Общий обработчик навигации,
+      который будет ниже,
+      сам перенесёт фокус на следующую
+      видимую рабочую кнопку.
+    */
     if (
       event.key === 'Tab'
     ) {
-
-      event.preventDefault();
-
-
-      const btnSupplies =
-        el('btnSupplies');
-
-
-      /*
-        Если кнопка сейчас видима —
-        переносим фокус на неё.
-      */
-      if (
-        btnSupplies &&
-        btnSupplies.style.display !== 'none'
-      ) {
-
-        tsdInput.blur();
-
-        btnSupplies.focus();
-      }
-
-
       return;
     }
 
 
-    // =====================================================
-    // ENTER → ОБРАБОТКА ШТРИХКОДА
-    // =====================================================
-
+    /*
+      Штрихкод ТСД заканчивается Enter.
+    */
     if (
       event.key !== 'Enter'
     ) {
@@ -2538,21 +2610,17 @@ tsdInput.addEventListener(
       tsdInput.value.trim();
 
 
-    /*
-      Пустой Enter ничего не делает.
-    */
     if (!value) {
 
-      focusTsd(true);
+      focusTsd();
 
       return;
     }
 
 
     /*
-      Очищаем поле до обработки,
-      чтобы следующий скан начинался
-      с чистого значения.
+      Сразу очищаем поле для
+      следующего сканирования.
     */
     tsdInput.value =
       '';
@@ -2565,21 +2633,28 @@ tsdInput.addEventListener(
 
 
     /*
-      Если после обработки всё ещё
-      нужен скан — курсор возвращается
-      обратно в поле.
+      Если следующий этап тоже требует
+      сканирования — возвращаем курсор.
+
+      Если началась упаковка,
+      scannerNeedsInput() вернёт false
+      и поле будет скрыто.
     */
     if (
       scanSource === 'tsd' &&
       scannerNeedsInput()
     ) {
 
-      focusTsd(true);
+      focusTsd();
     }
   }
 );
 
-    el('btnSupplies').addEventListener(
+    // =========================================================
+// TAB-НАВИГАЦИЯ ДЛЯ ТСД
+// =========================================================
+
+document.addEventListener(
   'keydown',
   event => {
 
@@ -2590,34 +2665,100 @@ tsdInput.addEventListener(
     }
 
 
-    event.preventDefault();
+    /*
+      Эта специальная навигация нужна
+      только в режиме ТСД.
+    */
+    if (
+      scanSource !== 'tsd'
+    ) {
+      return;
+    }
+
+
+    const targets = [];
 
 
     /*
-      Tab на кнопке "Все поставки"
-      возвращает фокус непосредственно
-      в поле ТСД.
-
-      Кнопки ТСД / Камера пропускаются.
+      Поле сканирования добавляется
+      в навигацию только если оно сейчас
+      действительно показано.
     */
     if (
-      scanSource === 'tsd'
+      scannerNeedsInput() &&
+      el('tsd-wrap').offsetParent !== null
     ) {
 
-      focusTsd(true);
-
-    } else {
-
-      /*
-        Если сейчас выбрана камера,
-        сначала переключаемся на ТСД,
-        потом setScanSource сам поставит
-        курсор в поле.
-      */
-      setScanSource(
-        'tsd'
+      targets.push(
+        tsdInput
       );
     }
+
+
+    /*
+      Затем идут ВСЕ рабочие кнопки,
+      которые сейчас видны.
+    */
+    targets.push(
+      ...getVisibleActionButtons()
+    );
+
+
+    if (!targets.length) {
+      return;
+    }
+
+
+    const currentIndex =
+      targets.indexOf(
+        document.activeElement
+      );
+
+
+    /*
+      Если фокус находится вне нашего
+      рабочего интерфейса — стандартный
+      Tab не перехватываем.
+    */
+    if (
+      currentIndex === -1
+    ) {
+      return;
+    }
+
+
+    event.preventDefault();
+
+
+    const direction =
+      event.shiftKey
+        ? -1
+        : 1;
+
+
+    let nextIndex =
+      currentIndex +
+      direction;
+
+
+    if (
+      nextIndex >= targets.length
+    ) {
+      nextIndex = 0;
+    }
+
+
+    if (
+      nextIndex < 0
+    ) {
+      nextIndex =
+        targets.length - 1;
+    }
+
+
+    targets[
+      nextIndex
+    ].focus();
   }
 );
 
@@ -2791,16 +2932,29 @@ function processScannedCode(
       playSuccess();
 
       mode =
-        'pack';
-
-      render();
+  'pack';
 
 
-      if (
-        source === 'camera'
-      ) {
-        stopCamera();
-      }
+render();
+
+
+if (
+  source === 'camera'
+) {
+
+  stopCamera();
+
+} else {
+
+  /*
+    Поле ТСД уже исчезло.
+
+    Сразу ставим фокус на первую
+    доступную рабочую кнопку —
+    обычно это "Закрыть коробку".
+  */
+  focusFirstActionButton();
+}
 
       return;
     }
