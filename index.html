@@ -661,6 +661,11 @@ body {
     .btn-gray {
       background: #8a8a8a;
     }
+    
+    #btnSupplies:focus {
+  outline: 3px solid #1a73e8;
+  outline-offset: 2px;
+}
   </style>
 </head>
 
@@ -675,20 +680,22 @@ body {
   >
 
     <button
-      type="button"
-      id="btnModeTsd"
-      class="scan-mode-btn active"
-    >
-      ТСД
-    </button>
+  type="button"
+  id="btnModeTsd"
+  class="scan-mode-btn active"
+  tabindex="-1"
+>
+  ТСД
+</button>
 
     <button
-      type="button"
-      id="btnModeCamera"
-      class="scan-mode-btn"
-    >
-      Камера
-    </button>
+  type="button"
+  id="btnModeCamera"
+  class="scan-mode-btn"
+  tabindex="-1"
+>
+  Камера
+</button>
 
   </div>
 
@@ -706,14 +713,14 @@ body {
   </span>
 
   <input
-    id="tsdInput"
-    type="text"
-    inputmode="none"
-    autocomplete="off"
-    autocorrect="off"
-    autocapitalize="off"
-    spellcheck="false"
-  >
+  id="tsdInput"
+  type="text"
+  autocomplete="off"
+  autocorrect="off"
+  autocapitalize="off"
+  spellcheck="false"
+  tabindex="0"
+>
 
 </div>
 
@@ -2476,12 +2483,107 @@ tsdInput.addEventListener(
   'keydown',
   event => {
 
+    // =====================================================
+    // TAB → "ВСЕ ПОСТАВКИ"
+    // =====================================================
+
+    if (
+      event.key === 'Tab'
+    ) {
+
+      event.preventDefault();
+
+
+      const btnSupplies =
+        el('btnSupplies');
+
+
+      /*
+        Если кнопка сейчас видима —
+        переносим фокус на неё.
+      */
+      if (
+        btnSupplies &&
+        btnSupplies.style.display !== 'none'
+      ) {
+
+        tsdInput.blur();
+
+        btnSupplies.focus();
+      }
+
+
+      return;
+    }
+
+
+    // =====================================================
+    // ENTER → ОБРАБОТКА ШТРИХКОДА
+    // =====================================================
+
+    if (
+      event.key !== 'Enter'
+    ) {
+      return;
+    }
+
+
+    event.preventDefault();
+
+
+    getAudioContext();
+
+
+    const value =
+      tsdInput.value.trim();
+
+
     /*
-      Большинство ТСД после кода отправляют Enter.
-      Некоторые настроены на Tab — поддерживаем оба.
+      Пустой Enter ничего не делает.
+    */
+    if (!value) {
+
+      focusTsd(true);
+
+      return;
+    }
+
+
+    /*
+      Очищаем поле до обработки,
+      чтобы следующий скан начинался
+      с чистого значения.
+    */
+    tsdInput.value =
+      '';
+
+
+    processScannedCode(
+      value,
+      'tsd'
+    );
+
+
+    /*
+      Если после обработки всё ещё
+      нужен скан — курсор возвращается
+      обратно в поле.
     */
     if (
-      event.key !== 'Enter' &&
+      scanSource === 'tsd' &&
+      scannerNeedsInput()
+    ) {
+
+      focusTsd(true);
+    }
+  }
+);
+
+    el('btnSupplies').addEventListener(
+  'keydown',
+  event => {
+
+    if (
       event.key !== 'Tab'
     ) {
       return;
@@ -2492,26 +2594,30 @@ tsdInput.addEventListener(
 
 
     /*
-      KeyDown считается действием пользователя,
-      поэтому здесь можно разблокировать звук.
+      Tab на кнопке "Все поставки"
+      возвращает фокус непосредственно
+      в поле ТСД.
+
+      Кнопки ТСД / Камера пропускаются.
     */
-    getAudioContext();
+    if (
+      scanSource === 'tsd'
+    ) {
 
+      focusTsd(true);
 
-    const value =
-      tsdInput.value;
+    } else {
 
-
-    tsdInput.value = '';
-
-
-    processScannedCode(
-      value,
-      'tsd'
-    );
-
-
-    focusTsd();
+      /*
+        Если сейчас выбрана камера,
+        сначала переключаемся на ТСД,
+        потом setScanSource сам поставит
+        курсор в поле.
+      */
+      setScanSource(
+        'tsd'
+      );
+    }
   }
 );
 
