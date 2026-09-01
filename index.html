@@ -2171,7 +2171,6 @@ async function stopCamera() {
 
 let scanSwitchId = 0;
 
-
 async function setScanSource(
   source
 ) {
@@ -2182,17 +2181,6 @@ async function setScanSource(
   ) {
     return;
   }
-
-
-  if (
-    source === 'tsd'
-  ) {
-
-    tsdBuffer = '';
-    tsdInput.value = '';
-
-    // дальше остаётся твой существующий код
-    // переключения на ТСД
 
 
   /*
@@ -2216,15 +2204,18 @@ async function setScanSource(
   ) {
 
     /*
-      Сразу меняем интерфейс,
-      чтобы пользователь не ждал stop().
+      Очищаем возможный остаток
+      предыдущего сканирования.
     */
+    tsdBuffer = '';
+    tsdInput.value = '';
+
+
     updateScanSurface();
 
 
     /*
-      Снимаем фокус с видеорежима
-      и полностью выключаем камеру.
+      Полностью выключаем камеру.
     */
     await stopCamera();
 
@@ -2237,31 +2228,30 @@ async function setScanSource(
     }
 
 
-updateScanSurface();
+    updateScanSurface();
 
 
-if (
-  scannerNeedsInput()
-) {
+    if (
+      scannerNeedsInput()
+    ) {
 
-  /*
-    Сейчас ждём скан —
-    курсор в поле ТСД.
-  */
-  focusTsd();
+      /*
+        Если сейчас нужен скан —
+        возвращаем курсор в поле ТСД.
+      */
+      focusTsd();
 
-} else {
+    } else {
 
-  /*
-    Сейчас упаковка —
-    поля ТСД вообще нет,
-    поэтому фокус на рабочую кнопку.
-  */
-  focusFirstActionButton();
-}
+      /*
+        Если идёт упаковка и поле скрыто —
+        ставим фокус на первую рабочую кнопку.
+      */
+      focusFirstActionButton();
+    }
 
 
-return;
+    return;
   }
 
 
@@ -2269,9 +2259,6 @@ return;
   // ПЕРЕКЛЮЧЕНИЕ НА КАМЕРУ
   // =====================================================
 
-  /*
-    Убираем курсор из поля ТСД.
-  */
   try {
     tsdInput.blur();
   } catch (e) {}
@@ -2281,13 +2268,8 @@ return;
 
 
   /*
-    Сначала убираем возможный старый
-    видеопоток.
-
-    Это позволяет несколько раз подряд
-    делать:
-
-    ТСД → Камера → ТСД → Камера
+    Останавливаем возможный старый
+    видеопоток перед новым запуском.
   */
   await stopCamera();
 
@@ -2320,11 +2302,6 @@ return;
   updateScanSurface();
 
 
-  /*
-    Камера запускается на любом этапе,
-    где сейчас ожидается штрихкод:
-    коробка, товар или подтверждение коробки.
-  */
   if (
     scannerNeedsInput()
   ) {
