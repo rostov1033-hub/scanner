@@ -1616,58 +1616,6 @@ function focusFirstActionButton() {
   );
 }
     
-    {
-
-  if (
-    scanSource !== 'tsd'
-  ) {
-    return;
-  }
-
-
-  /*
-    При обычной работе ставим курсор,
-    только когда требуется скан.
-
-    force=true используется при ручном
-    переключении Камера → ТСД.
-  */
-  if (
-    !force &&
-    !scannerNeedsInput()
-  ) {
-    return;
-  }
-
-
-  /*
-    Поле должно оставаться доступным,
-    иначе браузер не сможет поставить
-    в него курсор.
-  */
-  tsdInput.disabled =
-    false;
-
-
-  setTimeout(
-    () => {
-
-      try {
-
-        tsdInput.focus({
-          preventScroll: true
-        });
-
-      } catch (e) {
-
-        tsdInput.focus();
-      }
-
-    },
-    20
-  );
-}
-
 
 function updateScanSurface() {
 
@@ -2205,52 +2153,6 @@ async function stopCamera() {
   );
 }
 
-
-async function stopCamera() {
-
-  /*
-    Если scanner.start() ещё выполняется,
-    ждём его завершения.
-
-    Иначе переключение туда-сюда может
-    оставить Html5Qrcode в промежуточном
-    состоянии.
-  */
-  let attempts =
-    0;
-
-
-  while (
-    cameraStarting &&
-    attempts < 30
-  ) {
-
-    await new Promise(
-      resolve =>
-        setTimeout(
-          resolve,
-          30
-        )
-    );
-
-
-    attempts++;
-  }
-
-
-  try {
-
-    await scanner.stop();
-
-  } catch (e) {}
-
-
-  cameraRunning =
-    false;
-
-  cameraStarting =
-    false;
-}
 
 
 // =========================================================
