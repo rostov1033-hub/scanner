@@ -1,5 +1,5 @@
 const CACHE_NAME =
-  'box-scanner-v17';
+  'box-scanner-v18';
 
 const LOCAL_FILES = [
   './',
