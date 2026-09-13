@@ -622,6 +622,19 @@ body {
       padding: 3px 0 10px 8px;
     }
 
+    .sup-sub {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  font-size: 13px;
+  color: #666;
+}
+
+.sup-sub small:last-child {
+  text-align: right;
+}
+
     .sup-green {
   color: #0b8f3d;
   font-weight: 700;
@@ -3663,13 +3676,14 @@ el('btnAgain').onclick =
           b.supply || 'Без поставки';
 
 
-        const st =
+          const st =
           stats[supplyName] =
           stats[supplyName] || {
             total: 0,
             done: 0,
             work: 0,
-            clusters: []
+            clusters: [],
+            stores: []
           };
 
 
@@ -3700,6 +3714,10 @@ el('btnAgain').onclick =
           st.clusters.push(
             b.cluster
           );
+        }
+
+          if (b.store && !st.stores.includes(b.store)) {
+          st.stores.push(b.store);
         }
       }
 
@@ -3868,15 +3886,13 @@ const supplyNames =
             '</span>' +
 
 
-            (
-              st.clusters.length
+                        (
+              st.clusters.length || st.stores.length
                 ?
-                  '<br>' +
-                  '<small style="color:#666">' +
-                  escapeHtml(
-                    st.clusters.join(', ')
-                  ) +
-                  '</small>'
+                  '<div class="sup-sub">' +
+                    '<small>' + escapeHtml(st.clusters.join(', ')) + '</small>' +
+                    '<small>' + escapeHtml(st.stores.join(', ')) + '</small>' +
+                  '</div>'
                 :
                   ''
             ) +
