@@ -364,11 +364,13 @@
     }
 
     #card td {
-      padding: 7px 4px;
-      border-bottom: 1px solid #eee;
-      font-size: 15px;
-      vertical-align: top;
-    }
+  padding: 7px 4px;
+  border-bottom: 1px solid #eee;
+  font-size: 15px;
+  vertical-align: top;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 
     #card td:first-child {
       color: #666;
@@ -545,6 +547,9 @@ body {
   overflow-wrap: anywhere;
   -webkit-tap-highlight-color: transparent;
 }
+
+.box-main-row td { cursor: pointer; }
+.box-main-row:active { background: #f7f7f7; }
 
 .box-barcode {
   width: 100%;
@@ -797,6 +802,54 @@ body {
     const DB_CACHE_KEY = 'scanner_db_cache_v3';
     const QUEUE_KEY    = 'scanner_action_queue_v1';
 
+        // =========================================================
+    // INDEXEDDB: очередь и настройки для фоновой синхронизации
+    // =========================================================
+
+    const SYNC_DB_NAME = 'scanner-sync';
+
+    function openSyncDb() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(SYNC_DB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const d = req.result;
+          if (!d.objectStoreNames.contains('queue')) d.createObjectStore('queue', { keyPath: 'id' });
+          if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv', { keyPath: 'key' });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    function idbRun(store, txMode, fn) {
+      return openSyncDb().then(d => new Promise((resolve, reject) => {
+        const tx = d.transaction(store, txMode);
+        const req = fn(tx.objectStore(store));
+        tx.oncomplete = () => { d.close(); resolve(req ? req.result : undefined); };
+        tx.onerror = () => { d.close(); reject(tx.error); };
+        tx.onabort = () => { d.close(); reject(tx.error); };
+      }));
+    }
+
+    const queueGetAll = () => idbRun('queue', 'readonly', s => s.getAll());
+    const queuePut = item => idbRun('queue', 'readwrite', s => s.put(item));
+    const queueDelete = id => idbRun('queue', 'readwrite', s => s.delete(id));
+    const kvSet = (key, value) => idbRun('kv', 'readwrite', s => s.put({ key, value }));
+
+    async function queueDeleteByCode(code) {
+      const items = await queueGetAll();
+      for (const item of items) if (item.code === code) await queueDelete(item.id);
+    }
+
+    // Разовый перенос старой очереди из localStorage в IndexedDB
+    (async () => {
+      try {
+        const old = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+        for (const item of old) await queuePut(item);
+        localStorage.removeItem(QUEUE_KEY);
+      } catch (e) {}
+    })();
+
 
     // =========================================================
     // DOM
@@ -824,6 +877,10 @@ body {
   confirm — ждём повторный скан коробки для закрытия
 */
 let mode = 'box';
+
+    // Когда камера в режиме закрытия последний раз видела код коробки.
+// Нужно, чтобы коробка не закрылась сама, пока её этикетка просто стоит в кадре.
+let confirmSeenAt = 0;
 
 
 /*
@@ -894,98 +951,70 @@ let syncBusy = false;
     // ОЧЕРЕДЬ ДЕЙСТВИЙ
     // =========================================================
 
-    function getQueue() {
+       async function getQueue() {
       try {
-        return JSON.parse(
-          localStorage.getItem(QUEUE_KEY) || '[]'
-        );
+        return (await queueGetAll()).sort((a, b) => a.createdAt - b.createdAt);
       } catch (e) {
         return [];
       }
     }
 
-    function saveQueue(queue) {
-      localStorage.setItem(
-        QUEUE_KEY,
-        JSON.stringify(queue)
-      );
+    function registerBackgroundSync() {
+      if (!('serviceWorker' in navigator) || !('SyncManager' in window)) return;
+      navigator.serviceWorker.ready
+        .then(reg => reg.sync.register('send-queue'))
+        .catch(() => {});
+    }
 
+    async function addToQueue(action, code, newStatus) {
+      // На одну коробку держим только последнее действие:
+      // «close» заменяет ещё не отправленный «start».
+      try { await queueDeleteByCode(code); } catch (e) {}
+      try {
+        await queuePut({
+          id: Date.now().toString(36) + Math.random().toString(36).slice(2),
+          action, code, newStatus, createdAt: Date.now()
+        });
+      } catch (e) {}
+      registerBackgroundSync();
       updateNetState();
     }
 
-    function addToQueue(action, code, newStatus) {
-      const queue = getQueue();
-
-      queue.push({
-        id:
-          Date.now().toString(36) +
-          Math.random().toString(36).slice(2),
-
-        action,
-        code,
-        newStatus,
-        createdAt: Date.now()
-      });
-
-      saveQueue(queue);
-    }
-
-
     /*
-      Если мы загрузили свежую таблицу с сервера,
-      но у нас есть ещё не отправленные локальные действия,
-      накладываем их поверх серверной версии.
-
-      Благодаря этому офлайн-изменения не исчезнут.
+      Накладываем ещё не отправленные локальные действия
+      поверх свежей серверной выгрузки.
     */
-    function applyPendingStatuses(targetDb) {
-      const queue = getQueue();
-
+    async function applyPendingStatuses(targetDb) {
+      const queue = await getQueue();
       queue.forEach(item => {
-        if (targetDb[item.code]) {
-          targetDb[item.code].status = item.newStatus;
-        }
+        if (targetDb[item.code]) targetDb[item.code].status = item.newStatus;
       });
-
       return targetDb;
-    }
-
+    }       
 
     // =========================================================
     // ИНДИКАТОР СЕТИ
     // =========================================================
 
-    function updateNetState() {
-      const queue = getQueue();
-
+        async function updateNetState() {
+      const queue = await getQueue();
       netState.className = '';
 
       if (!navigator.onLine) {
         netState.classList.add('offline');
-
-        netState.textContent =
-          queue.length
-            ? 'Офлайн • ' + queue.length
-            : 'Офлайн';
-
+        netState.textContent = queue.length ? 'Офлайн • ' + queue.length : 'Офлайн';
         return;
       }
-
       if (syncBusy) {
         netState.classList.add('syncing');
         netState.textContent = 'Синхронизация…';
         return;
       }
-
       if (queue.length) {
         netState.classList.add('pending');
-
-        netState.textContent =
-          'Ждут отправки • ' + queue.length;
-
+        netState.textContent = 'Ждут отправки • ' + queue.length;
         return;
       }
-
       netState.textContent = 'Онлайн';
     }
 
@@ -994,20 +1023,18 @@ let syncBusy = false;
     // ПИН
     // =========================================================
 
+        let mirroredPin = null;
+
     function getPin() {
       let pin = localStorage.getItem('scanner_pin');
-
       if (!pin) {
         pin = prompt('Введите ПИН доступа:') || '';
-
-        if (pin) {
-          localStorage.setItem(
-            'scanner_pin',
-            pin
-          );
-        }
+        if (pin) localStorage.setItem('scanner_pin', pin);
       }
-
+      if (pin && pin !== mirroredPin) {
+        mirroredPin = pin;
+        kvSet('pin', pin).catch(() => {});
+      }
       return pin;
     }
 
@@ -1058,65 +1085,27 @@ let syncBusy = false;
     // СИНХРОНИЗАЦИЯ ОЧЕРЕДИ
     // =========================================================
 
-    async function processQueue() {
+        async function processQueue() {
       if (syncBusy) return;
-
-      if (!navigator.onLine) {
-        updateNetState();
-        return;
-      }
-
-      let queue = getQueue();
-
-      if (!queue.length) {
-        updateNetState();
-        return;
-      }
+      if (!navigator.onLine) { updateNetState(); return; }
+      const queue = await getQueue();
+      if (!queue.length) { updateNetState(); return; }
 
       syncBusy = true;
       updateNetState();
 
-      while (
-        queue.length &&
-        navigator.onLine
-      ) {
-        const item = queue[0];
-
+      for (const item of queue) {
+        if (!navigator.onLine) break;
         try {
           const res = await api(
-            'action=' +
-            encodeURIComponent(item.action) +
-            '&code=' +
-            encodeURIComponent(item.code)
+            'action=' + encodeURIComponent(item.action) + '&code=' + encodeURIComponent(item.code)
           );
-
           if (!res.ok) {
-            /*
-              Сервер ответил, но само действие
-              не принял.
-
-              Не удаляем действие из очереди,
-              чтобы оно не потерялось.
-            */
-            break;
+            console.warn('Действие отклонено сервером и удалено из очереди:', item, res);
           }
-
-          /*
-            Действие успешно записано —
-            удаляем его из очереди.
-          */
-          queue.shift();
-
-          saveQueue(queue);
-
+          await queueDelete(item.id);
         } catch (e) {
-          /*
-            Нет сети / временная ошибка.
-
-            Ничего не удаляем.
-            Повторим позже.
-          */
-          break;
+          break; // нет сети / временная ошибка — повторим позже
         }
       }
 
@@ -1168,7 +1157,7 @@ let syncBusy = false;
       try {
         const res = await api('all=1');
 
-        db = applyPendingStatuses(
+        db = await applyPendingStatuses(
           res.all || {}
         );
 
@@ -1488,30 +1477,10 @@ function normalizeScan(value) {
 
 
 function scannerNeedsInput() {
-
-  if (
-    mode === 'box' &&
-    !currentCode
-  ) {
-    return true;
-  }
-
-
-  if (
-    mode === 'product'
-  ) {
-    return true;
-  }
-
-
-  if (
-    mode === 'confirm'
-  ) {
-    return true;
-  }
-
-
-  return false;
+  // box — ждём коробку (в т.ч. когда на экране закрытая или ненайденная)
+  // product — ждём товар
+  // confirm — ждём повторный скан коробки для закрытия
+  return mode === 'box' || mode === 'product' || mode === 'confirm';
 }
 
 function focusTsd() {
@@ -2802,396 +2771,125 @@ function onCameraScan(text) {
 // - камера
 // =========================================================
 
-function processScannedCode(
-  rawCode,
-  source
-) {
-
-  const code =
-    normalizeScan(rawCode);
-
-
-  if (
-    source === 'tsd'
-  ) {
-
-    tsdBuffer = '';
-    tsdInput.value = '';
-  }
-
-
-  if (!code) {
-    return;
-  }
-
+function processScannedCode(rawCode, source) {
+  const code = normalizeScan(rawCode);
+  if (source === 'tsd') { tsdBuffer = ''; tsdInput.value = ''; }
+  if (!code) return;
 
   if (!db) {
-
     playError();
-
-    statusEl.innerHTML =
-      '<span class="warn">' +
-      'Данные ещё не загружены' +
-      '</span>';
-
+    statusEl.innerHTML = '<span class="warn">Данные ещё не загружены</span>';
     return;
   }
 
+  // ===== ЭТАП 1: КОРОБКА =====
+  if (mode === 'box') {
+    // Камера продолжает видеть коробку, которая уже на экране — молча игнорируем.
+    if (source === 'camera' && code === currentCode) return;
 
-  // =====================================================
-  // ЭТАП 1: КОРОБКА
-  // =====================================================
+    const box = db[code];
+    currentCode = code;
 
-  if (
-    mode === 'box'
-  ) {
-
-    const box =
-      db[code];
-
-
-    /*
-      Коробки нет в таблице.
-    */
     if (!box) {
-
-      currentCode =
-        code;
-
       playError();
-
       render();
-
-      statusEl.innerHTML =
-        '<span class="warn">' +
-        'Коробка «' +
-        escapeHtml(code) +
-        '» не найдена' +
-        '</span>';
-
-
-      if (
-        source === 'camera'
-      ) {
-        stopCamera();
-      }
-
+      statusEl.innerHTML = '<span class="warn">Коробка «' + escapeHtml(code) + '» не найдена</span>';
       return;
     }
 
-
-    currentCode =
-      code;
-
-
-    /*
-      Уже закрытая коробка.
-    */
-    if (
-      box.status === ST_DONE
-    ) {
-
+    if (box.status === ST_DONE) {
       playError();
-
       render();
-
-      statusEl.innerHTML =
-        '<span class="warn">' +
-        'Коробка уже закрыта' +
-        '</span>';
-
-
-      if (
-        source === 'camera'
-      ) {
-        stopCamera();
-      }
-
+      statusEl.innerHTML = '<span class="warn">Коробка уже закрыта</span>';
       return;
     }
 
-
-    /*
-      Если коробка уже "В процессе",
-      считаем, что товар для неё
-      ранее уже был проверен.
-
-      Сразу возвращаемся к упаковке.
-    */
-    if (
-      box.status === ST_WORK
-    ) {
-
+    if (box.status === ST_WORK) {
+      // Товар для неё уже проверяли — сразу ждём повторный скан для закрытия.
       playSuccess();
-
-      mode =
-  'pack';
-
-
-render();
-
-
-if (
-  source === 'camera'
-) {
-
-  stopCamera();
-
-} else {
-
-  /*
-    Поле ТСД уже исчезло.
-
-    Сразу ставим фокус на первую
-    доступную рабочую кнопку —
-    обычно это "Закрыть коробку".
-  */
-  focusFirstActionButton();
-}
-
+      mode = 'confirm';
+      confirmSeenAt = Date.now();
+      render();
       return;
     }
 
-
-    /*
-      Новая коробка:
-      переходим к сканированию товара.
-    */
     playSuccess();
-
-
-    mode =
-      'product';
-
-
-    /*
-      Для камеры запоминаем недавно
-      считанную коробку.
-
-      Если она ещё секунду остаётся
-      перед камерой, не будем ошибочно
-      считать её "неправильным товаром".
-    */
-    if (
-      source === 'camera'
-    ) {
-
-      lastBoxCameraCode =
-        code;
-
-      lastBoxCameraAt =
-        Date.now();
-    }
-
-
+    mode = 'product';
+    if (source === 'camera') { lastBoxCameraCode = code; lastBoxCameraAt = Date.now(); }
     render();
-
     return;
   }
 
-
-  // =====================================================
-  // ЭТАП 2: ТОВАР
-  // =====================================================
-
-  if (
-    mode === 'product'
-  ) {
-
-    const box =
-      db[currentCode];
-
-
+  // ===== ЭТАП 2: ТОВАР =====
+  if (mode === 'product') {
+    const box = db[currentCode];
     if (!box) {
-
       playError();
-
-      statusEl.innerHTML =
-        '<span class="warn">' +
-        'Ошибка: коробка не найдена' +
-        '</span>';
-
+      statusEl.innerHTML = '<span class="warn">Ошибка: коробка не найдена</span>';
       return;
     }
 
+    const expectedBarcode = normalizeScan(box.productBarcode);
 
-    const expectedBarcode =
-      normalizeScan(
-        box.productBarcode
-      );
+    // Первые 2 секунды камера может ещё видеть этикетку коробки.
+    if (source === 'camera' && code === lastBoxCameraCode &&
+        code !== expectedBarcode && Date.now() - lastBoxCameraAt < 2000) return;
 
-
-    /*
-      После скана коробки камера может
-      ещё видеть эту же этикетку.
-
-      Первые 2 секунды просто игнорируем
-      повторный код коробки.
-    */
-    if (
-      source === 'camera' &&
-      code === lastBoxCameraCode &&
-      code !== expectedBarcode &&
-      Date.now() -
-        lastBoxCameraAt <
-        2000
-    ) {
-      return;
-    }
-
-
-    /*
-      В таблице не указан штрихкод товара.
-    */
     if (!expectedBarcode) {
-
       playError();
-
-      statusEl.innerHTML =
-        '<span class="warn">' +
-        'У этой коробки не указан штрихкод товара в колонке F' +
-        '</span>';
-
+      statusEl.innerHTML = '<span class="warn">У этой коробки не указан штрихкод товара в колонке F</span>';
       return;
     }
 
-
-    /*
-      НЕПРАВИЛЬНЫЙ ТОВАР.
-    */
-    if (
-      code !== expectedBarcode
-    ) {
-
+    if (code !== expectedBarcode) {
       playError();
-
-      statusEl.innerHTML =
-        '<span class="warn">' +
-        'НЕПРАВИЛЬНЫЙ ТОВАР' +
-        '</span>' +
-
-        '<br>' +
-
-        'Отсканирован: ' +
-        escapeHtml(code);
-
-
-      /*
-        Камеру не выключаем:
-        можно сразу показать правильный товар.
-      */
-
+      statusEl.innerHTML = '<span class="warn">НЕПРАВИЛЬНЫЙ ТОВАР</span><br>Отсканирован: ' + escapeHtml(code);
       focusTsd();
-
       return;
     }
 
-
-    /*
-      ПРАВИЛЬНЫЙ ТОВАР.
-    */
     playSuccess();
-
-
-    /*
-      Сразу, без ожидания сервера,
-      ставим "В процессе".
-    */
-    setStatusSilent(
-      'start',
-      ST_WORK
-    );
-
-
-    /*
-      Кнопка "Начать запаковку"
-      больше не нужна.
-
-      Мы автоматически перешли
-      к упаковке.
-    */
-    mode =
-      'pack';
-
-
+    setStatusSilent('start', ST_WORK);
+    mode = 'confirm';
+    confirmSeenAt = Date.now();
     render();
-
-
-    /*
-      Пока пользователь физически
-      запаковывает коробку,
-      камера не нужна.
-    */
-    if (
-      source === 'camera'
-    ) {
-      stopCamera();
-    }
-
-
     return;
   }
 
+  // ===== ЭТАП 3: ПОВТОРНЫЙ СКАН КОРОБКИ = ЗАКРЫТИЕ =====
+  if (mode === 'confirm') {
+    const box = db[currentCode];
 
-  // =====================================================
-  // ЭТАП 3: ПОВТОРНАЯ КОРОБКА
-  // =====================================================
-
-  if (
-    mode === 'confirm'
-  ) {
-
-    /*
-      Сканируется другая коробка.
-    */
-    if (
-      code !==
-      normalizeScan(currentCode)
-    ) {
-
-      playError();
-
-      statusEl.innerHTML =
-        '<span class="warn">' +
-        'ШТРИХКОДЫ НЕ СОВПАДАЮТ' +
-        '</span>' +
-
-        '<br>' +
-
-        'Нужна коробка «' +
-        escapeHtml(currentCode) +
-        '»';
-
+    // В кадр снова попал штрихкод товара — для камеры это не ошибка.
+    if (box && code === normalizeScan(box.productBarcode)) {
+      if (source !== 'camera') {
+        playError();
+        statusEl.innerHTML = '<span class="warn">Это штрихкод товара.</span> Для закрытия отсканируйте коробку «' + escapeHtml(currentCode) + '»';
+      }
       return;
     }
 
-
-    /*
-      Всё правильно.
-    */
-    playSuccess();
-
-
-    setStatusSilent(
-      'close',
-      ST_DONE
-    );
-
-
-    mode =
-      'box';
-
-
-    render();
-
-
-    if (
-      source === 'camera'
-    ) {
-      stopCamera();
+    if (code !== normalizeScan(currentCode)) {
+      playError();
+      statusEl.innerHTML = '<span class="warn">ШТРИХКОДЫ НЕ СОВПАДАЮТ</span><br>Нужна коробка «' + escapeHtml(currentCode) + '»';
+      return;
     }
 
+    // Камера: закрываем только если код коробки УШЁЛ из кадра и появился снова.
+    // Пока этикетка просто стоит перед объективом, коды идут раз в ~0.7 с — это не новый скан.
+    if (source === 'camera') {
+      const gap = Date.now() - confirmSeenAt;
+      confirmSeenAt = Date.now();
+      if (gap < 2500) return;
+    }
 
+    playSuccess();
+    setStatusSilent('close', ST_DONE);
+    mode = 'box';
+    render();
+    statusEl.innerHTML = 'Коробка «' + escapeHtml(currentCode) + '» закрыта. Отсканируйте следующую коробку';
+    // Камеру не выключаем — сразу можно сканировать следующую.
+    if (source === 'tsd') focusTsd();
     return;
   }
 }
@@ -3222,6 +2920,7 @@ document.addEventListener(
       return;
     }
 
+        processQueue();
 
     /*
       КАМЕРА
@@ -3416,271 +3115,49 @@ focusTsd(true);
     // =========================================================
 
     function render() {
-
   hideButtons();
+  const box = db && currentCode ? db[currentCode] : null;
+  cardEl.style.display = currentCode ? 'block' : 'none';
 
-
-  const box =
-    db &&
-    currentCode
-      ? db[currentCode]
-      : null;
-
-
-  cardEl.style.display =
-    currentCode
-      ? 'block'
-      : 'none';
-
-
-  /*
-    Неизвестная коробка.
-  */
-  if (
-    currentCode &&
-    !box
-  ) {
-
-    cardEl.innerHTML =
-      '<span class="warn">' +
-      'Код «' +
-      escapeHtml(currentCode) +
-      '» не найден в таблице' +
-      '</span>';
-
-
-    el('btnAgain').style.display =
-      'block';
-
-    el('btnSupplies').style.display =
-      'block';
-
-
+  if (currentCode && !box) {
+    cardEl.innerHTML = '<span class="warn">Код «' + escapeHtml(currentCode) + '» не найден в таблице</span>';
+    el('btnAgain').style.display = 'block';
+    el('btnSupplies').style.display = 'block';
     updateScanSurface();
-
     return;
   }
 
+  if (!box) { updateScanSurface(); return; }
 
-  if (!box) {
-
-    updateScanSurface();
-
-    return;
-  }
-
-
-  const badgeClass =
-    box.status === ST_DONE
-      ? 'st-done'
-      : box.status === ST_WORK
-        ? 'st-work'
-        : 'st-new';
-
-
-  const stats =
-    supplyStats(
-      box.supply
-    );
-
-
-  const counterClass =
-    getCounterClass(
-      stats
-    );
-
+  const badgeClass = box.status === ST_DONE ? 'st-done' : box.status === ST_WORK ? 'st-work' : 'st-new';
+  const stats = supplyStats(box.supply);
+  const counterClass = getCounterClass(stats);
 
   let html =
-
     '<div class="badge-row">' +
-
-      '<span class="badge ' +
-      badgeClass +
-      '">' +
-
-        escapeHtml(
-          box.status
-        ) +
-
+      '<span class="badge ' + badgeClass + '">' + escapeHtml(box.status) + '</span>' +
+      '<span class="counter ' + counterClass + '" onclick="toggleSupply()">' +
+        'Закрыто ' + stats.counted + '/' + stats.total +
       '</span>' +
-
-      '<span class="counter ' +
-      counterClass +
-      '" onclick="toggleSupply()">' +
-
-        'Закрыто ' +
-        stats.counted +
-        '/' +
-        stats.total +
-
-      '</span>' +
-
     '</div>' +
-
-
     '<table>' +
+      '<tr><td>Коробка</td><td><b>' + escapeHtml(currentCode) + '</b></td></tr>';
+  for (const k in box.info) {
+    html += '<tr><td>' + escapeHtml(k) + '</td><td>' + escapeHtml(box.info[k]) + '</td></tr>';
+  }
+  html += '</table><div id="supplyList" style="display:none"></div>';
+  cardEl.innerHTML = html;
 
-
-      /*
-        Номер коробки первым,
-        над кластером.
-      */
-      '<tr>' +
-
-        '<td>Коробка</td>' +
-
-        '<td><b>' +
-          escapeHtml(
-            currentCode
-          ) +
-        '</b></td>' +
-
-      '</tr>';
-
-
-  for (
-    const k in box.info
-  ) {
-
-    html +=
-
-      '<tr>' +
-
-        '<td>' +
-          escapeHtml(k) +
-        '</td>' +
-
-        '<td>' +
-          escapeHtml(
-            box.info[k]
-          ) +
-        '</td>' +
-
-      '</tr>';
+  if (box.status === ST_DONE) {
+    statusEl.textContent = 'Коробка уже закрыта';
+  } else if (mode === 'product') {
+    statusEl.innerHTML = '<span class="hint">Коробка найдена. Теперь отсканируйте товар</span>';
+  } else if (mode === 'confirm') {
+    statusEl.innerHTML = '<span class="hint">Товар верный. Положите товар в коробку, запакуйте, наклейте стикер и отсканируйте коробку «' + escapeHtml(currentCode) + '» ещё раз для закрытия</span>';
   }
 
-
-  html +=
-    '</table>' +
-
-    '<div ' +
-      'id="supplyList" ' +
-      'style="display:none">' +
-    '</div>';
-
-
-  cardEl.innerHTML =
-    html;
-
-
-  // =====================================================
-  // ЗАКРЫТА
-  // =====================================================
-
-  if (
-    box.status === ST_DONE
-  ) {
-
-    statusEl.textContent =
-      'Коробка уже закрыта';
-
-
-    el('btnAgain').style.display =
-      'block';
-
-    el('btnSupplies').style.display =
-      'block';
-
-
-    updateScanSurface();
-
-    return;
-  }
-
-
-  // =====================================================
-  // ЖДЁМ ТОВАР
-  // =====================================================
-
-  if (
-    mode === 'product'
-  ) {
-
-    statusEl.innerHTML =
-      '<span class="hint">' +
-      'Коробка найдена. Теперь отсканируйте товар' +
-      '</span>';
-
-
-    el('btnAgain').style.display =
-      'block';
-
-    el('btnSupplies').style.display =
-      'block';
-
-
-    updateScanSurface();
-
-    return;
-  }
-
-
-  // =====================================================
-  // УПАКОВКА
-  // =====================================================
-
-  if (
-    mode === 'pack'
-  ) {
-
-    statusEl.innerHTML =
-      '<span class="hint">' +
-      'Товар верный. Запакуйте коробку и наклейте стикер' +
-      '</span>';
-
-
-    el('btnClose').style.display =
-      'block';
-
-    el('btnAgain').style.display =
-      'block';
-
-    el('btnSupplies').style.display =
-      'block';
-
-
-    updateScanSurface();
-
-    return;
-  }
-
-
-  // =====================================================
-  // ПОДТВЕРЖДЕНИЕ ЗАКРЫТИЯ
-  // =====================================================
-
-  if (
-    mode === 'confirm'
-  ) {
-
-    statusEl.innerHTML =
-      '<span class="hint">' +
-      'Отсканируйте коробку «' +
-      escapeHtml(currentCode) +
-      '» ещё раз' +
-      '</span>';
-
-
-    el('btnCancel').style.display =
-      'block';
-
-
-    updateScanSurface();
-
-    return;
-  }
-
-
+  el('btnAgain').style.display = 'block';
+  el('btnSupplies').style.display = 'block';
   updateScanSurface();
 }
 
@@ -3750,7 +3227,7 @@ focusTsd(true);
 
 
         html +=
-  '<tr class="box-main-row">' +
+  '<tr class="box-main-row" data-code="' + escapeHtml(code) + '">' +
 
     '<td>' +
 
@@ -3955,6 +3432,27 @@ document.addEventListener(
     }
   }
 );
+    
+    // Клик по строке коробки (не по её коду) — открываем как отсканированную
+document.addEventListener('click', event => {
+  if (event.target.closest('.box-code')) return;
+  const row = event.target.closest('.box-main-row');
+  if (!row || !row.dataset.code) return;
+  openBoxFromList(row.dataset.code);
+});
+
+async function openBoxFromList(code) {
+  getAudioContext();
+  mode = 'box';
+  currentCode = null;
+  processScannedCode(code, 'list');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (scanSource === 'camera' && scannerNeedsInput()) {
+    await startCamera();
+  } else {
+    focusTsd();
+  }
+}
 
     
     // =========================================================
@@ -4016,51 +3514,13 @@ document.addEventListener(
 // ТИХАЯ СМЕНА СТАТУСА
 // =========================================================
 
-function setStatusSilent(
-  action,
-  newStatus
-) {
-
-  const code =
-    currentCode;
-
-
-  if (
-    !db ||
-    !db[code]
-  ) {
-    return;
-  }
-
-
-  /*
-    Интерфейс меняется мгновенно.
-  */
-  db[code].status =
-    newStatus;
-
-
-  saveDbCache();
-
-
-  /*
-    Серверная запись попадает
-    в локальную очередь.
-  */
-  addToQueue(
-    action,
-    code,
-    newStatus
-  );
-
-
-  /*
-    Отправляем в фоне.
-    Пользователь этого не ждёт.
-  */
-  processQueue();
-}
-
+    function setStatusSilent(action, newStatus) {
+      const code = currentCode;
+      if (!db || !db[code]) return;
+      db[code].status = newStatus;   // интерфейс меняется мгновенно
+      saveDbCache();
+      addToQueue(action, code, newStatus).then(() => processQueue());
+    }
 
 // =========================================================
 // ЗАКРЫТЬ КОРОБКУ
@@ -4516,7 +3976,7 @@ const supplyNames =
 
 
           db =
-            applyPendingStatuses(
+            await applyPendingStatuses((
               res.all || {}
             );
 
@@ -4546,21 +4006,19 @@ const supplyNames =
     // PWA / SERVICE WORKER
     // =========================================================
 
-    if (
-      'serviceWorker' in navigator
-    ) {
+        if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
 
-      window.addEventListener(
-        'load',
-        () => {
-
-          navigator
-            .serviceWorker
-            .register('./sw.js')
-            .catch(() => {});
-        }
-      );
+      // Воркер отправил что-то из очереди в фоне — обновляем индикатор
+      navigator.serviceWorker.addEventListener('message', event => {
+        if (event.data && event.data.type === 'queue-updated') updateNetState();
+      });
     }
+
+    // Адрес API для сервис-воркера (переменные страницы ему недоступны)
+    kvSet('apiUrl', API_URL).catch(() => {});
 
   </script>
 
