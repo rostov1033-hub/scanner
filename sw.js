@@ -272,3 +272,72 @@ self.addEventListener(
     );
   }
 );
+
+// =========================================================
+// ФОНОВАЯ СИНХРОНИЗАЦИЯ (Background Sync)
+// Страница кладёт действия в IndexedDB и регистрирует sync 'send-queue'.
+// Когда появляется сеть, браузер будит этот воркер даже при закрытой странице.
+// =========================================================
+
+const SYNC_DB_NAME = 'scanner-sync';
+
+function openSyncDb() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(SYNC_DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const d = req.result;
+      if (!d.objectStoreNames.contains('queue')) d.createObjectStore('queue', { keyPath: 'id' });
+      if (!d.objectStoreNames.contains('kv')) d.createObjectStore('kv', { keyPath: 'key' });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function idbRun(store, txMode, fn) {
+  return openSyncDb().then(d => new Promise((resolve, reject) => {
+    const tx = d.transaction(store, txMode);
+    const req = fn(tx.objectStore(store));
+    tx.oncomplete = () => { d.close(); resolve(req ? req.result : undefined); };
+    tx.onerror = () => { d.close(); reject(tx.error); };
+    tx.onabort = () => { d.close(); reject(tx.error); };
+  }));
+}
+
+const queueGetAll = () => idbRun('queue', 'readonly', s => s.getAll());
+const queueDelete = id => idbRun('queue', 'readwrite', s => s.delete(id));
+const kvGet = key => idbRun('kv', 'readonly', s => s.get(key)).then(r => (r ? r.value : null));
+
+self.addEventListener('sync', event => {
+  if (event.tag === 'send-queue') event.waitUntil(sendQueue());
+});
+
+async function sendQueue() {
+  const apiUrl = await kvGet('apiUrl');
+  const pin = await kvGet('pin');
+  if (!apiUrl || !pin) return;
+
+  const items = (await queueGetAll()).sort((a, b) => a.createdAt - b.createdAt);
+
+  for (const item of items) {
+    const url = apiUrl +
+      '?action=' + encodeURIComponent(item.action) +
+      '&code=' + encodeURIComponent(item.code) +
+      '&key=' + encodeURIComponent(pin);
+
+    // Нет сети — fetch бросит ошибку, промис отклонится,
+    // и браузер сам повторит sync позже.
+    const response = await fetch(url, { cache: 'no-store' });
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+
+    const res = await response.json();
+    if (res.error === 'auth') return; // неверный ПИН — пусть разбирается страница
+
+    // ok или отклонено сервером — в обоих случаях повторять бессмысленно
+    await queueDelete(item.id);
+  }
+
+  // Сообщаем открытым страницам, что очередь изменилась
+  const clients = await self.clients.matchAll({ includeUncontrolled: true });
+  clients.forEach(c => c.postMessage({ type: 'queue-updated' }));
+}
